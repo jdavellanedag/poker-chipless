@@ -1,0 +1,17 @@
+{
+  "name": "poker-chipless",
+  "private": true,
+  "packageManager": "npm@10.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "start": "tsx apps/server/src/index.ts"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  }
+}
