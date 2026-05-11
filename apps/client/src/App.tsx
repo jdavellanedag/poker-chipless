@@ -77,9 +77,13 @@ export default function App() {
     socket.emit('host:reorder-players', { orderedPlayerIds }, () => {});
   }
 
+  function handleNewHand() {
+    socket.emit('host:new-hand', {}, () => {});
+  }
+
   if (gameState) {
     if (gameState.phase === 'active') {
-      return <GameScreen state={gameState} myPlayerId={myPlayerId} />;
+      return <GameScreen state={gameState} myPlayerId={myPlayerId} onNewHand={handleNewHand} />;
     }
     return (
       <LobbyScreen
@@ -324,27 +328,64 @@ function LobbyScreen({
   );
 }
 
-function GameScreen({ state, myPlayerId }: { state: GameState; myPlayerId: string }) {
+function GameScreen({
+  state,
+  myPlayerId,
+  onNewHand,
+}: {
+  state: GameState;
+  myPlayerId: string;
+  onNewHand: () => void;
+}) {
+  const me = state.players.find((p) => p.id === myPlayerId);
+  const isHost = me?.isHost ?? false;
+
   return (
     <div className="min-h-screen bg-slate-900 p-4">
       <div className="max-w-sm mx-auto pt-8">
         <div className="text-center mb-6">
           <p className="text-slate-400 text-xs uppercase tracking-wide mb-1">Pot</p>
-          <p className="text-3xl font-bold text-white">{state.pot}</p>
+          <p data-testid="pot" className="text-3xl font-bold text-white">{state.pot}</p>
+          <p className="text-slate-500 text-xs mt-1 uppercase tracking-wide">{state.round}</p>
         </div>
-        <ul className="space-y-2">
-          {state.players.map((p) => (
-            <li
-              key={p.id}
-              className="flex justify-between items-center bg-slate-800 rounded-lg px-4 py-3"
-            >
-              <span className={p.id === myPlayerId ? 'text-emerald-400 font-semibold' : 'text-white'}>
-                {p.displayName}
-              </span>
-              <span className="text-slate-300 font-mono">{p.chipCount}</span>
-            </li>
-          ))}
+
+        <ul className="space-y-2 mb-6">
+          {state.players.map((p, i) => {
+            const isButton = i === state.dealerButtonIndex;
+            return (
+              <li
+                key={p.id}
+                data-testid={`player-row-${p.displayName}`}
+                className="flex justify-between items-center bg-slate-800 rounded-lg px-4 py-3"
+              >
+                <span className="flex items-center gap-2">
+                  {isButton && (
+                    <span className="text-xs bg-yellow-600 text-yellow-100 px-1.5 py-0.5 rounded-full font-mono">D</span>
+                  )}
+                  <span className={p.id === myPlayerId ? 'text-emerald-400 font-semibold' : 'text-white'}>
+                    {p.displayName}
+                  </span>
+                </span>
+                <span className="flex items-center gap-3">
+                  {p.currentBet > 0 && (
+                    <span className="text-yellow-400 font-mono text-sm">{p.currentBet}</span>
+                  )}
+                  <span data-testid={`chips-${p.displayName}`} className="text-slate-300 font-mono">{p.chipCount}</span>
+                </span>
+              </li>
+            );
+          })}
         </ul>
+
+        {isHost && (
+          <button
+            data-testid="new-hand-btn"
+            onClick={onNewHand}
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded"
+          >
+            New Hand
+          </button>
+        )}
       </div>
     </div>
   );

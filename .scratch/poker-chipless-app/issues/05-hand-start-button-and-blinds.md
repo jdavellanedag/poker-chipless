@@ -1,10 +1,10 @@
 ---
-status: in-progress
+status: done
 ---
 
 # Hand Start — Button & Blinds
 
-> **Status:** `in-progress`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._
