@@ -91,6 +91,12 @@ describe('startGame', () => {
 });
 
 describe('newHand', () => {
+  it('rejects when phase is not active', () => {
+    const state = makelobby(['Alice', 'Bob']);
+    const result = newHand(state);
+    expect(result.ok).toBe(false);
+  });
+
   it('in heads-up: button is SB and BB acts first pre-flop', () => {
     const state = makeActive(['Alice', 'Bob']);
     const result = newHand(state);

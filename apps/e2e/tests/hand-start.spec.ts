@@ -23,14 +23,6 @@ async function joinSession(browser: Browser, code: string, playerName: string) {
   return { ctx, page };
 }
 
-async function startGame(hostPage: ReturnType<typeof expect>['page'], stack = '1000', sb = '10', bb = '20') {
-  await hostPage.getByLabel(/starting stack/i).fill(stack);
-  await hostPage.getByLabel(/small blind/i).fill(sb);
-  await hostPage.getByLabel(/big blind/i).fill(bb);
-  await hostPage.getByRole('button', { name: 'Start Game' }).click();
-  await expect(hostPage.getByRole('button', { name: 'New Hand' })).toBeVisible();
-}
-
 test.describe('Hand start — New Hand button', () => {
   test('host sees New Hand button after game starts', async ({ browser }) => {
     const { ctx: hostCtx, page: hostPage, code } = await createSession(browser, 'Alice');
