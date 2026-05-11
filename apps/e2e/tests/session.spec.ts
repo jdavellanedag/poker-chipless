@@ -11,12 +11,14 @@ test.describe('Session creation', () => {
     await expect(code).toHaveText(/^[A-Z0-9]{6}$/);
   });
 
-  test('host sees waiting message after creating session', async ({ page }) => {
+  test('host lands in lobby with their name visible after creating session', async ({ page }) => {
     await page.goto('/');
     await page.getByPlaceholder('Your display name (host)').fill('Alice');
     await page.getByRole('button', { name: 'Create Game' }).click();
 
-    await expect(page.getByText('Waiting for players to join')).toBeVisible();
+    // Host transitions directly to the lobby screen
+    await expect(page.getByText('Alice')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Start Game' })).toBeVisible();
   });
 
   test('empty display name shows validation error', async ({ page }) => {
