@@ -10,7 +10,9 @@
       "Bash(npm test *)",
       "Bash(npx tsc *)",
       "Bash(git -C /home/zadock/projects/poker-chipless add -A)",
-      "Bash(git -C /home/zadock/projects/poker-chipless status)"
+      "Bash(git -C /home/zadock/projects/poker-chipless status)",
+      "Bash(git *)",
+      "Skill(review)"
     ]
   }
 }
