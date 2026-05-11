@@ -13,6 +13,9 @@ build/
 .env.local
 .env.*.local
 
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+
 # Editor
 .vscode/
 .idea/
