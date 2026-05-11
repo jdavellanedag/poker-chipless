@@ -5,7 +5,7 @@ import { join, dirname } from 'path';
 import express from 'express';
 import { Server } from 'socket.io';
 import type { ServerToClientEvents, ClientToServerEvents, GameState, CreateAckResponse, JoinAckResponse } from '@poker-chipless/types';
-import { generateCode, createSession, joinSession } from './session.js';
+import { createSession, joinSession } from './session.js';
 
 const app = express();
 const httpServer = createServer(app);
