@@ -53,7 +53,8 @@ status: pending | in-progress | done
 poker-chipless/
 ├── apps/
 │   ├── client/       # React + Vite + TypeScript + Tailwind + Zustand
-│   └── server/       # Node.js + TypeScript + Socket.IO
+│   ├── server/       # Node.js + TypeScript + Socket.IO
+│   └── e2e/          # Playwright end-to-end tests
 ├── packages/
 │   └── types/        # Shared Socket.IO event types and game state interfaces
 ├── turbo.json
@@ -78,10 +79,12 @@ poker-chipless/
 ## Dev Commands
 
 ```bash
-npm install          # install all workspace deps from repo root
-npm run dev          # start client dev server + server in watch mode (via Turborepo)
-npm run build        # build all packages and apps
-npm run start        # serve production build on port 3000
+npm install               # install all workspace deps from repo root
+npm run dev               # start client dev server + server in watch mode (via Turborepo)
+npm run build             # build all packages and apps
+npm run start             # serve production build on port 3000
+npm run test:e2e          # build then run Playwright E2E suite (headless)
+npm run test:e2e:headed   # same but shows the browser window
 ```
 
 ---
@@ -140,7 +143,11 @@ All network/transport code lives in an isolated layer. No LAN-specific code outs
 | `host:start-game` | `{ startingStack: number, smallBlind: number, bigBlind: number }` |
 | `host:end-session` | `{}` |
 
-All client→server events return an acknowledgement: `{ ok: true }` or `{ ok: false, error: string }`.
+Most client→server events return `{ ok: true }` or `{ ok: false, error: string }`. The session events return richer acks:
+- `session:create` → `{ ok: true; code: string; token: string; playerId: string }` or `{ ok: false; error: string }`
+- `session:join` → `{ ok: true; token: string; playerId: string }` or `{ ok: false; error: string }`
+
+Canonical definitions are in `packages/types` (`CreateAckResponse`, `JoinAckResponse`, `AckResponse`).
 
 ---
 
@@ -214,8 +221,8 @@ Lobby → (host clicks Start Game) →
 
 ## Reconnection
 
-- Server issues a `crypto.randomUUID()` token on join, returned in the `session:join` ack.
-- Client stores token in `sessionStorage`. On reload, sends token with `session:join`.
+- Server issues a `crypto.randomUUID()` token on join, returned in the `session:join` ack alongside `playerId`.
+- Client stores `session_code`, `session_token`, `display_name`, and `player_id` in `sessionStorage`. On reload, sends token with `session:join`.
 - Server maps `token → playerId` and restores seat.
 - Host disconnect → `phase` transitions to `'paused'` → un-pauses on host reconnect.
 - Non-host disconnect mid-turn → 10-second server-side timer → auto-fold if still disconnected.
@@ -246,9 +253,10 @@ Do not implement these, and do not design abstractions in anticipation of them:
 When adding a new player or host action to the game engine, touch all of these:
 
 1. `packages/types` — add event to `ClientToServerEvents`, add payload interface if needed
-2. `apps/server` — add handler in the action handlers module, call `appendLog`, broadcast `game:state`
-3. `apps/client` — add the corresponding UI control, fire the event, handle the ack
-4. Update this CLAUDE.md event reference table if the event is new
+2. `apps/server/src/game.ts` — add a pure function `(state, payload) => GameState | error`
+3. `apps/server/src/index.ts` — add a socket handler that calls the pure function and broadcasts `game:state`
+4. `apps/client` — add the corresponding UI control, fire the event, handle the ack
+5. Update this CLAUDE.md event reference table if the event is new
 
 ---
 
@@ -258,5 +266,5 @@ When adding a new player or host action to the game engine, touch all of these:
 - No `any` types — use `unknown` and narrow, or fix the type properly.
 - No `console.log` in client code — use a dev-only logger utility or remove before merging.
 - Tailwind only for styling — no inline `style` props, no CSS modules, no styled-components.
-- All server-side game state mutations are pure functions where possible: `(state: GameState, payload) => GameState`. Makes logic easy to test without Socket.IO.
+- All server-side game state mutations are pure functions where possible: `(state: GameState, payload) => GameState`. Makes logic easy to test without Socket.IO. These live in `apps/server/src/game.ts`; socket handlers in `index.ts` call them and then broadcast the result.
 - No floating point. If you find yourself writing `/`, ask whether the host should resolve it instead.
