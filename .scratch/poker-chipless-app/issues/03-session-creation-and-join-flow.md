@@ -1,10 +1,10 @@
 ---
-status: pending
+status: in-progress
 ---
 
 # Session Creation & Join Flow
 
-> **Status:** `pending`
+> **Status:** `in-progress`
 
 ## Clarification
 _No open questions._
