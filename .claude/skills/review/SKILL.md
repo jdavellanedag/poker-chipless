@@ -39,10 +39,11 @@ Review the active issue branch end-to-end, fix small gaps, then gate on user con
 
 ## Phase 3: Run Tests
 
-1. Run the full test suite: `npm test` (or the workspace equivalent — check `package.json` scripts first).
-2. If no test command exists, run `npm run build` as a minimum signal and note the absence of tests.
-3. Record: total tests, passing, failing, any skipped.
-4. If tests fail, move to Phase 4 before continuing.
+1. Run the unit/integration suite: `npm test --workspace=apps/server`.
+2. Check whether the diff touches any UI behavior (new screens, new interactions, changed flows). If yes, also run the E2E suite: `npm run test:e2e` from the repo root. This builds the project first, so it is the authoritative signal for browser-visible behavior.
+3. If no test command exists, run `npm run build` as a minimum signal and note the absence of tests.
+4. Record for each suite: total tests, passing, failing, any skipped.
+5. If any test fails, move to Phase 4 before continuing.
 
 ---
 
@@ -72,7 +73,8 @@ Present a structured summary to the user:
 | 1 | ...       | ✅ / ⚠️ partial / ❌ missing |
 
 ### Tests
-- Suite: <pass>/<total> passing
+- Unit suite: <pass>/<total> passing
+- E2E suite: <pass>/<total> passing (or "not run — no UI changes in diff")
 - Fixes applied: <list or "none">
 
 ### Outstanding (needs your attention)

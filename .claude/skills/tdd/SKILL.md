@@ -45,7 +45,11 @@ Before writing any test:
 1. Read the issue, spec, or PRD. If a `.scratch/` path is available, read it.
 2. Explore the existing codebase — understand conventions, entry points, existing test patterns.
 3. Identify the **tracer bullet**: the thinnest end-to-end slice that proves the system can do the thing. This is your first test.
-4. Briefly state the tracer bullet and the sequence of subsequent slices. Ask the user to confirm before proceeding.
+4. Decide which test layer is appropriate:
+   - **Unit / integration (Vitest)** — pure logic, server-side handlers, socket event processing. Lives in `apps/server/src/__tests__/`.
+   - **E2E (Playwright)** — anything a user sees or clicks in the browser: UI flows, real Socket.IO round-trips, multi-client interactions. Lives in `apps/e2e/tests/`. Use when the acceptance criteria describe visible UI behavior.
+   - Both layers may be needed for a single slice — Vitest for the server logic, Playwright for the UI that surfaces it.
+5. Briefly state the tracer bullet, the test layer(s) you'll use, and the sequence of subsequent slices. Ask the user to confirm before proceeding.
 
 ### Phase 2: Tracer Bullet
 
@@ -55,7 +59,10 @@ Write ONE test that confirms ONE thing about the system — the most fundamental
 - Fail for the right reason (the behavior does not exist yet, not a compile error or import failure)
 - Read like a specification
 
-Run the test. Confirm it is **RED** before writing any implementation.
+**For Vitest tests:** run `npm test --workspace=apps/server`.
+**For Playwright E2E tests:** run `npm run test:e2e` from the repo root (this builds first, then runs Playwright). Use `--headed` variant to watch the browser during development.
+
+Confirm the test is **RED** before writing any implementation.
 
 ### Phase 3: Incremental Loop
 

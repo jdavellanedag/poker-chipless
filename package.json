@@ -9,7 +9,9 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "start": "tsx apps/server/src/index.ts"
+    "start": "tsx apps/server/src/index.ts",
+    "test:e2e": "npm run build && npx playwright test --config apps/e2e/playwright.config.ts",
+    "test:e2e:headed": "npm run build && npx playwright test --config apps/e2e/playwright.config.ts --headed"
   },
   "devDependencies": {
     "turbo": "^2.0.0"
