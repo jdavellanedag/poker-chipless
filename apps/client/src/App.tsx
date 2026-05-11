@@ -2,12 +2,10 @@ import { useState, useEffect } from 'react';
 import type { GameState } from '@poker-chipless/types';
 import socket from './socket.js';
 
-type Screen = 'home' | 'join' | 'lobby';
-
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('home');
+  const [screen, setScreen] = useState<'home' | 'join'>('home');
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [sessionCode, setSessionCode] = useState('');
+  const [myPlayerId, setMyPlayerId] = useState('');
   const [error, setError] = useState('');
   const [createName, setCreateName] = useState('');
   const [joinCode, setJoinCode] = useState('');
@@ -16,77 +14,81 @@ export default function App() {
 
   useEffect(() => {
     socket.connect();
+    socket.on('game:state', (state) => setGameState(state));
 
-    socket.on('game:state', (state) => {
-      setGameState(state);
-      setScreen('lobby');
-    });
-
-    // attempt reconnection from sessionStorage
     const savedCode = sessionStorage.getItem('session_code');
     const savedToken = sessionStorage.getItem('session_token');
     const savedName = sessionStorage.getItem('display_name');
-    if (savedCode && savedToken && savedName) {
-      socket.emit('session:join', { code: savedCode, displayName: savedName, token: savedToken }, (res: { ok: boolean }) => {
+    const savedPlayerId = sessionStorage.getItem('player_id');
+    if (savedCode && savedToken && savedName && savedPlayerId) {
+      setMyPlayerId(savedPlayerId);
+      socket.emit('session:join', { code: savedCode, displayName: savedName, token: savedToken }, (res) => {
         if (!res.ok) {
           sessionStorage.clear();
+          setMyPlayerId('');
         }
       });
     }
 
-    return () => {
-      socket.off('game:state');
-    };
+    return () => { socket.off('game:state'); };
   }, []);
 
   function handleCreate() {
     const name = createName.trim();
-    if (!name) {
-      setError('Display name cannot be empty.');
-      return;
-    }
+    if (!name) { setError('Display name cannot be empty.'); return; }
     setError('');
     setLoading(true);
     socket.emit('session:create', { displayName: name }, (res) => {
       setLoading(false);
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
+      if (!res.ok) { setError(res.error); return; }
       sessionStorage.setItem('session_code', res.code);
       sessionStorage.setItem('session_token', res.token);
       sessionStorage.setItem('display_name', name);
-      setSessionCode(res.code);
+      sessionStorage.setItem('player_id', res.playerId);
+      setMyPlayerId(res.playerId);
     });
   }
 
   function handleJoin() {
     const name = joinName.trim();
     const code = joinCode.trim().toUpperCase();
-    if (!name) {
-      setError('Display name cannot be empty.');
-      return;
-    }
-    if (code.length !== 6) {
-      setError('Session code must be 6 characters.');
-      return;
-    }
+    if (!name) { setError('Display name cannot be empty.'); return; }
+    if (code.length !== 6) { setError('Session code must be 6 characters.'); return; }
     setError('');
     setLoading(true);
     socket.emit('session:join', { code, displayName: name }, (res) => {
       setLoading(false);
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
+      if (!res.ok) { setError(res.error); return; }
       sessionStorage.setItem('session_code', code);
       sessionStorage.setItem('session_token', res.token);
       sessionStorage.setItem('display_name', name);
+      sessionStorage.setItem('player_id', res.playerId);
+      setMyPlayerId(res.playerId);
     });
   }
 
-  if (screen === 'lobby' && gameState) {
-    return <LobbyScreen state={gameState} sessionCode={gameState.code} />;
+  function handleStartGame(startingStack: number, smallBlind: number, bigBlind: number, onResult: (err?: string) => void) {
+    socket.emit('host:start-game', { startingStack, smallBlind, bigBlind }, (res) => {
+      onResult(res.ok ? undefined : res.error);
+    });
+  }
+
+  function handleReorder(orderedPlayerIds: string[]) {
+    socket.emit('host:reorder-players', { orderedPlayerIds }, () => {});
+  }
+
+  if (gameState) {
+    if (gameState.phase === 'active') {
+      return <GameScreen state={gameState} myPlayerId={myPlayerId} />;
+    }
+    return (
+      <LobbyScreen
+        state={gameState}
+        myPlayerId={myPlayerId}
+        onStartGame={handleStartGame}
+        onReorder={handleReorder}
+      />
+    );
   }
 
   if (screen === 'join') {
@@ -124,42 +126,30 @@ export default function App() {
     );
   }
 
-  // home screen — shows "Create Game" and, after creation, the session code
   return (
     <CenteredCard>
       <h1 className="text-3xl font-bold text-white mb-2">Poker Chipless</h1>
       <p className="text-slate-400 text-sm mb-8">No chips needed. Run the game from your phone.</p>
-
-      {sessionCode ? (
-        <div className="text-center mb-6">
-          <p className="text-slate-400 text-sm mb-1">Share this code with your players</p>
-          <p className="text-4xl font-mono font-bold text-emerald-400 tracking-widest">{sessionCode}</p>
-          <p className="text-slate-500 text-xs mt-2">Waiting for players to join…</p>
-        </div>
-      ) : (
-        <>
-          <input
-            className="w-full bg-slate-700 text-white rounded px-3 py-2 mb-4 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            placeholder="Your display name (host)"
-            value={createName}
-            onChange={(e) => setCreateName(e.target.value)}
-          />
-          {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
-          <button
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded mb-3 disabled:opacity-50"
-            onClick={handleCreate}
-            disabled={loading}
-          >
-            {loading ? 'Creating…' : 'Create Game'}
-          </button>
-          <button
-            className="w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 rounded"
-            onClick={() => { setScreen('join'); setError(''); }}
-          >
-            Join Game
-          </button>
-        </>
-      )}
+      <input
+        className="w-full bg-slate-700 text-white rounded px-3 py-2 mb-4 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        placeholder="Your display name (host)"
+        value={createName}
+        onChange={(e) => setCreateName(e.target.value)}
+      />
+      {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
+      <button
+        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded mb-3 disabled:opacity-50"
+        onClick={handleCreate}
+        disabled={loading}
+      >
+        {loading ? 'Creating…' : 'Create Game'}
+      </button>
+      <button
+        className="w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 rounded"
+        onClick={() => { setScreen('join'); setError(''); }}
+      >
+        Join Game
+      </button>
     </CenteredCard>
   );
 }
@@ -174,26 +164,72 @@ function CenteredCard({ children }: { children: React.ReactNode }) {
   );
 }
 
-function LobbyScreen({ state, sessionCode }: { state: GameState; sessionCode: string }) {
+function LobbyScreen({
+  state,
+  myPlayerId,
+  onStartGame,
+  onReorder,
+}: {
+  state: GameState;
+  myPlayerId: string;
+  onStartGame: (stack: number, sb: number, bb: number, onResult: (err?: string) => void) => void;
+  onReorder: (ids: string[]) => void;
+}) {
+  const [stack, setStack] = useState('1000');
+  const [smallBlind, setSmallBlind] = useState('10');
+  const [bigBlind, setBigBlind] = useState('20');
+  const [formError, setFormError] = useState('');
+
+  const me = state.players.find((p) => p.id === myPlayerId);
+  const isHost = me?.isHost ?? false;
   const connected = state.players.filter((p) => p.isConnected);
+
+  function moveUp(index: number) {
+    if (index === 0) return;
+    const order = state.players.map((p) => p.id);
+    [order[index - 1], order[index]] = [order[index], order[index - 1]];
+    onReorder(order);
+  }
+
+  function moveDown(index: number) {
+    if (index === state.players.length - 1) return;
+    const order = state.players.map((p) => p.id);
+    [order[index], order[index + 1]] = [order[index + 1], order[index]];
+    onReorder(order);
+  }
+
+  function handleStart() {
+    const s = parseInt(stack, 10);
+    const sb = parseInt(smallBlind, 10);
+    const bb = parseInt(bigBlind, 10);
+    if (!s || s <= 0 || !sb || sb <= 0 || !bb || bb <= 0) {
+      setFormError('All values must be positive integers.');
+      return;
+    }
+    setFormError('');
+    onStartGame(s, sb, bb, (err) => { if (err) setFormError(err); });
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 p-4">
       <div className="max-w-sm mx-auto">
         <div className="text-center mb-8 pt-8">
           <p className="text-slate-400 text-sm mb-1">Session code</p>
-          <p className="text-3xl font-mono font-bold text-emerald-400 tracking-widest">{sessionCode}</p>
+          <p className="text-3xl font-mono font-bold text-emerald-400 tracking-widest">{state.code}</p>
         </div>
+
         <h2 className="text-white font-semibold mb-3">Players ({connected.length})</h2>
-        <ul className="space-y-2">
-          {state.players.map((p) => (
+        <ul className="space-y-2 mb-8">
+          {state.players.map((p, i) => (
             <li
               key={p.id}
+              data-testid={`player-row-${p.displayName}`}
               className="flex items-center justify-between bg-slate-800 rounded-lg px-4 py-3"
             >
               <span className={p.isConnected ? 'text-white' : 'text-slate-500'}>
                 {p.displayName}
               </span>
-              <span className="flex gap-2">
+              <span className="flex items-center gap-2">
                 {p.isHost && (
                   <span className="text-xs bg-emerald-700 text-emerald-200 px-2 py-0.5 rounded-full">
                     host
@@ -204,7 +240,108 @@ function LobbyScreen({ state, sessionCode }: { state: GameState; sessionCode: st
                     disconnected
                   </span>
                 )}
+                {isHost && (
+                  <span className="flex gap-0.5">
+                    <button
+                      data-testid={`move-up-${p.displayName}`}
+                      onClick={() => moveUp(i)}
+                      disabled={i === 0}
+                      className="text-slate-400 hover:text-white disabled:opacity-20 w-6 text-center"
+                      aria-label={`Move ${p.displayName} up`}
+                    >▲</button>
+                    <button
+                      data-testid={`move-down-${p.displayName}`}
+                      onClick={() => moveDown(i)}
+                      disabled={i === state.players.length - 1}
+                      className="text-slate-400 hover:text-white disabled:opacity-20 w-6 text-center"
+                      aria-label={`Move ${p.displayName} down`}
+                    >▼</button>
+                  </span>
+                )}
               </span>
+            </li>
+          ))}
+        </ul>
+
+        {isHost ? (
+          <div className="bg-slate-800 rounded-xl p-4 space-y-3">
+            <h3 className="text-white font-semibold mb-1">Game Settings</h3>
+            <div>
+              <label className="text-slate-400 text-sm block mb-1" htmlFor="starting-stack">
+                Starting stack
+              </label>
+              <input
+                id="starting-stack"
+                type="number"
+                min={1}
+                className="w-full bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                value={stack}
+                onChange={(e) => setStack(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="text-slate-400 text-sm block mb-1" htmlFor="small-blind">
+                  Small blind
+                </label>
+                <input
+                  id="small-blind"
+                  type="number"
+                  min={1}
+                  className="w-full bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={smallBlind}
+                  onChange={(e) => setSmallBlind(e.target.value)}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-slate-400 text-sm block mb-1" htmlFor="big-blind">
+                  Big blind
+                </label>
+                <input
+                  id="big-blind"
+                  type="number"
+                  min={1}
+                  className="w-full bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={bigBlind}
+                  onChange={(e) => setBigBlind(e.target.value)}
+                />
+              </div>
+            </div>
+            {formError && <p className="text-red-400 text-sm">{formError}</p>}
+            <button
+              onClick={handleStart}
+              disabled={state.players.length < 2}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded disabled:opacity-40 disabled:cursor-not-allowed mt-1"
+            >
+              Start Game
+            </button>
+          </div>
+        ) : (
+          <p className="text-center text-slate-400 mt-4">Waiting for host to start…</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GameScreen({ state, myPlayerId }: { state: GameState; myPlayerId: string }) {
+  return (
+    <div className="min-h-screen bg-slate-900 p-4">
+      <div className="max-w-sm mx-auto pt-8">
+        <div className="text-center mb-6">
+          <p className="text-slate-400 text-xs uppercase tracking-wide mb-1">Pot</p>
+          <p className="text-3xl font-bold text-white">{state.pot}</p>
+        </div>
+        <ul className="space-y-2">
+          {state.players.map((p) => (
+            <li
+              key={p.id}
+              className="flex justify-between items-center bg-slate-800 rounded-lg px-4 py-3"
+            >
+              <span className={p.id === myPlayerId ? 'text-emerald-400 font-semibold' : 'text-white'}>
+                {p.displayName}
+              </span>
+              <span className="text-slate-300 font-mono">{p.chipCount}</span>
             </li>
           ))}
         </ul>

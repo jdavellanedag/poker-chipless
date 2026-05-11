@@ -1,10 +1,10 @@
 ---
-status: pending
+status: done
 ---
 
 # Waiting Lobby
 
-> **Status:** `pending`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._

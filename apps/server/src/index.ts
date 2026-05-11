@@ -6,6 +6,7 @@ import express from 'express';
 import { Server } from 'socket.io';
 import type { ServerToClientEvents, ClientToServerEvents, GameState, CreateAckResponse, JoinAckResponse } from '@poker-chipless/types';
 import { createSession, joinSession } from './session.js';
+import { startGame, reorderPlayers } from './game.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -32,13 +33,14 @@ io.on('connection', (socket) => {
     }
     const { state, token } = createSession(name);
     const tokenMap = new Map<string, string>();
-    tokenMap.set(token, state.players[0].id);
+    const hostId = state.players[0].id;
+    tokenMap.set(token, hostId);
     sessions.set(state.code, { state, tokenMap });
     socket.join(state.code);
     socket.data.code = state.code;
-    socket.data.playerId = state.players[0].id;
+    socket.data.playerId = hostId;
     io.to(state.code).emit('game:state', state);
-    ack({ ok: true, code: state.code, token } as CreateAckResponse);
+    ack({ ok: true, code: state.code, token, playerId: hostId } as CreateAckResponse);
   });
 
   socket.on('session:join', ({ code, displayName, token }, ack) => {
@@ -63,7 +65,7 @@ io.on('connection', (socket) => {
         socket.data.code = code.toUpperCase();
         socket.data.playerId = playerId;
         io.to(code.toUpperCase()).emit('game:state', session.state);
-        ack({ ok: true, token } as JoinAckResponse);
+        ack({ ok: true, token, playerId } as JoinAckResponse);
         return;
       }
     }
@@ -80,7 +82,33 @@ io.on('connection', (socket) => {
     socket.data.code = code.toUpperCase();
     socket.data.playerId = newPlayer.id;
     io.to(code.toUpperCase()).emit('game:state', session.state);
-    ack({ ok: true, token: result.token } as JoinAckResponse);
+    ack({ ok: true, token: result.token, playerId: newPlayer.id } as JoinAckResponse);
+  });
+
+  socket.on('host:reorder-players', ({ orderedPlayerIds }, ack) => {
+    const { code, playerId } = socket.data as { code?: string; playerId?: string };
+    const session = code ? sessions.get(code) : undefined;
+    if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
+    const player = session.state.players.find((p) => p.id === playerId);
+    if (!player?.isHost) { ack({ ok: false, error: 'Only the host can reorder players.' }); return; }
+    const result = reorderPlayers(session.state, orderedPlayerIds);
+    if (!result.ok) { ack({ ok: false, error: result.error }); return; }
+    session.state = result.state;
+    io.to(code!).emit('game:state', session.state);
+    ack({ ok: true });
+  });
+
+  socket.on('host:start-game', ({ startingStack, smallBlind, bigBlind }, ack) => {
+    const { code, playerId } = socket.data as { code?: string; playerId?: string };
+    const session = code ? sessions.get(code) : undefined;
+    if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
+    const player = session.state.players.find((p) => p.id === playerId);
+    if (!player?.isHost) { ack({ ok: false, error: 'Only the host can start the game.' }); return; }
+    const result = startGame(session.state, { startingStack, smallBlind, bigBlind });
+    if (!result.ok) { ack({ ok: false, error: result.error }); return; }
+    session.state = result.state;
+    io.to(code!).emit('game:state', session.state);
+    ack({ ok: true });
   });
 
   socket.on('disconnect', () => {
