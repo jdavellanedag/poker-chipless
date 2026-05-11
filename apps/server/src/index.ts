@@ -16,7 +16,7 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const clientBuildPath = join(__dirname, '../../client/dist');
 app.use(express.static(clientBuildPath));
-app.get('*', (_req, res) => {
+app.get('/*path', (_req, res) => {
   res.sendFile(join(clientBuildPath, 'index.html'));
 });
 
