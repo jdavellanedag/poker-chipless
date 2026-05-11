@@ -47,11 +47,11 @@ export interface ServerToClientEvents {
 export interface ClientToServerEvents {
   'session:create': (
     payload: { displayName: string },
-    ack: (res: AckResponse) => void,
+    ack: (res: CreateAckResponse) => void,
   ) => void;
   'session:join': (
     payload: { code: string; displayName: string; token?: string },
-    ack: (res: AckResponse) => void,
+    ack: (res: JoinAckResponse) => void,
   ) => void;
   'action:fold': (payload: Record<string, never>, ack: (res: AckResponse) => void) => void;
   'action:check': (payload: Record<string, never>, ack: (res: AckResponse) => void) => void;
@@ -89,3 +89,5 @@ export interface ClientToServerEvents {
 }
 
 export type AckResponse = { ok: true } | { ok: false; error: string };
+export type CreateAckResponse = { ok: true; code: string; token: string } | { ok: false; error: string };
+export type JoinAckResponse = { ok: true; token: string } | { ok: false; error: string };

@@ -3,7 +3,14 @@
     "allow": [
       "Bash(npm install *)",
       "Bash(npm run *)",
-      "Read(//home/zadock/.claude/**)"
+      "Read(//home/zadock/.claude/**)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Skill(tdd)",
+      "Bash(npm test *)",
+      "Bash(npx tsc *)",
+      "Bash(git -C /home/zadock/projects/poker-chipless add -A)",
+      "Bash(git -C /home/zadock/projects/poker-chipless status)"
     ]
   }
 }
