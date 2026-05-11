@@ -1,10 +1,10 @@
 ---
-status: pending
+status: done
 ---
 
 # Session Creation & Join Flow
 
-> **Status:** `pending`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._
@@ -16,15 +16,15 @@ Third issue, builds on the scaffold (01) and shared types (02). Delivers the fir
 Server generates a 6-char session code on creation, serves the compiled React client as static files, and prints the local IP on startup. Players navigate to the host's IP in their browser, enter the code and a display name, and land in the waiting lobby.
 
 ## Acceptance Criteria
-- [ ] `npm run start` (or `npm run dev` in dev mode) starts the server and prints: `Serving on http://<local-ip>:3000` to the terminal.
-- [ ] Host opens `http://localhost:3000`, sees a "Create Game" screen, clicks create, and receives a 6-char session code (uppercase, no ambiguous chars: no 0, O, 1, I).
-- [ ] Server serves the compiled `apps/client` build as static files from the same port (3000).
-- [ ] A player on another device navigates to `http://<host-ip>:3000`, enters the session code and a display name, and connects to the session.
-- [ ] The host's screen shows the player's display name appear in the lobby in real time.
-- [ ] Joining with an invalid or unknown session code shows a clear error message on the client.
-- [ ] Joining with an empty display name is rejected with a validation message.
-- [ ] The host is automatically identified as such (first to create the session); `player.isHost` is `true` for the host and `false` for all others.
-- [ ] Each joining player is issued a UUID reconnection token returned in the `session:join` acknowledgement and stored in `sessionStorage`.
+- [x] `npm run start` (or `npm run dev` in dev mode) starts the server and prints: `Serving on http://<local-ip>:3000` to the terminal.
+- [x] Host opens `http://localhost:3000`, sees a "Create Game" screen, clicks create, and receives a 6-char session code (uppercase, no ambiguous chars: no 0, O, 1, I).
+- [x] Server serves the compiled `apps/client` build as static files from the same port (3000).
+- [x] A player on another device navigates to `http://<host-ip>:3000`, enters the session code and a display name, and connects to the session.
+- [x] The host's screen shows the player's display name appear in the lobby in real time.
+- [x] Joining with an invalid or unknown session code shows a clear error message on the client.
+- [x] Joining with an empty display name is rejected with a validation message.
+- [x] The host is automatically identified as such (first to create the session); `player.isHost` is `true` for the host and `false` for all others.
+- [x] Each joining player is issued a UUID reconnection token returned in the `session:join` acknowledgement and stored in `sessionStorage`.
 
 ## Technical Notes
 - Session code generation: 6 chars from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (removes ambiguous chars).
