@@ -1,10 +1,10 @@
 ---
-status: pending
+status: done
 ---
 
 # Hand Start — Button & Blinds
 
-> **Status:** `pending`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._
