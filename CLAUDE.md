@@ -52,7 +52,7 @@ status: pending | in-progress | done
 ```
 poker-chipless/
 ├── apps/
-│   ├── client/       # React + Vite + TypeScript + Tailwind + Zustand
+│   ├── client/       # React + Vite + TypeScript + Tailwind
 │   ├── server/       # Node.js + TypeScript + Socket.IO
 │   └── e2e/          # Playwright end-to-end tests
 ├── packages/
@@ -69,7 +69,7 @@ poker-chipless/
 |-------|--------|
 | Monorepo | Turborepo + npm workspaces |
 | Client | React, Vite, TypeScript, Tailwind CSS v3 |
-| Client state | Zustand (UI-only state — see rules below) |
+| Client state | React `useState` — component-local only |
 | Server | Node.js, TypeScript, Socket.IO |
 | Shared types | `packages/types` — consumed by both apps |
 | Mobile (v2) | Capacitor (not in v1) |
@@ -103,8 +103,8 @@ After every mutation the server broadcasts the complete `GameState` object via `
 ### 4. No stringly-typed Socket.IO events
 All event names and payload types are defined in `packages/types` (`ServerToClientEvents`, `ClientToServerEvents`). Never use a raw string event name outside of that package. Both client and server import from `packages/types`.
 
-### 5. Zustand is for UI state only
-Zustand stores: modal open/closed, form input values, loading flags, overlay collapsed/expanded. Game state (the `GameState` object from the server) lives in a React context or a separate socket-state store — never mixed into Zustand stores.
+### 5. UI state is component-local only
+Use React `useState` for form inputs, loading flags, overlay open/closed, and other UI-only state. Game state (the `GameState` object from the server) lives in `App`-level `useState` and is passed down as props — it is never derived or duplicated in component-local state.
 
 ### 6. Server validates everything
 Client-side validation (e.g. minimum raise check before sending) is a UX courtesy only. The server re-validates every incoming action and returns `{ ok: false, error: string }` on rejection. Never trust the client.
