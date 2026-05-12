@@ -40,32 +40,40 @@ async function startHandWith2Players(browser: Browser) {
 
 test.describe('Player action buttons', () => {
   test('action buttons are visible only to the active player', async ({ browser }) => {
-    // Heads-up: Alice=SB/button, Bob=BB/active preflop
+    // Heads-up: Alice=SB/button acts first preflop, Bob=BB
     const { hostCtx, hostPage, bobCtx, bobPage } = await startHandWith2Players(browser);
 
-    // Bob is active preflop in heads-up — he should see action buttons
-    await expect(bobPage.getByTestId('action-buttons')).toBeVisible();
+    // Alice (SB/button) is active preflop — she should see action buttons
+    await expect(hostPage.getByTestId('action-buttons')).toBeVisible();
 
-    // Alice is not active — she should not see action buttons
-    await expect(hostPage.getByTestId('action-buttons')).not.toBeVisible();
+    // Bob (BB) is not active yet — he should not see action buttons
+    await expect(bobPage.getByTestId('action-buttons')).not.toBeVisible();
 
     await hostCtx.close();
     await bobCtx.close();
   });
 
-  test('"Call X" button shows the exact call amount', async ({ browser }) => {
-    // Heads-up: Alice(SB)=10 posted, Bob(BB/active)=20 posted, currentBet=20.
-    // Bob is active. Bob's currentBet=20, state.currentBet=20 → check option (no open raise).
-    // After Bob checks, Alice must call 10 (currentBet=20, Alice.currentBet=10).
+  test('"Call X" button shows the exact amount the active player must put in', async ({ browser }) => {
+    // Heads-up: Alice(SB)=10 posted, Bob(BB)=20 posted, currentBet=20.
+    // Alice acts first. Alice.currentBet=10, state.currentBet=20 → call amount = 10.
     const { hostCtx, hostPage, bobCtx, bobPage } = await startHandWith2Players(browser);
 
-    // Bob (BB) checks — preflop heads-up, BB acts first. No raise, so SB (Alice) still needs to act.
-    await expect(bobPage.getByTestId('btn-check')).toBeVisible();
-    await bobPage.getByTestId('btn-check').click();
-
-    // Alice posted SB=10, currentBet=20 → call amount = 10
+    // Alice (SB) is active immediately and must call 10 to match the BB
     await expect(hostPage.getByTestId('action-buttons')).toBeVisible();
     await expect(hostPage.getByTestId('btn-call')).toHaveText('Call 10');
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+
+  test('SB and BB badges are shown on the correct players', async ({ browser }) => {
+    const { hostCtx, hostPage, bobCtx, bobPage } = await startHandWith2Players(browser);
+
+    // Heads-up: Alice=SB/button, Bob=BB
+    await expect(hostPage.getByTestId('badge-sb-Alice')).toBeVisible();
+    await expect(hostPage.getByTestId('badge-bb-Bob')).toBeVisible();
+    await expect(bobPage.getByTestId('badge-sb-Alice')).toBeVisible();
+    await expect(bobPage.getByTestId('badge-bb-Bob')).toBeVisible();
 
     await hostCtx.close();
     await bobCtx.close();

@@ -97,7 +97,7 @@ describe('newHand', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('in heads-up: button is SB and BB acts first pre-flop', () => {
+  it('in heads-up: button is SB and button/SB acts first pre-flop', () => {
     const state = makeActive(['Alice', 'Bob']);
     const result = newHand(state);
     expect(result.ok).toBe(true);
@@ -107,8 +107,8 @@ describe('newHand', () => {
     expect(s.dealerButtonIndex).toBe(0);
     expect(s.players[0].currentBet).toBe(10); // Alice posted SB
     expect(s.players[1].currentBet).toBe(20); // Bob posted BB
-    // BB (Bob, index 1) acts first pre-flop in heads-up
-    expect(s.activePlayerIndex).toBe(1);
+    // Button/SB (Alice, index 0) acts first pre-flop in heads-up
+    expect(s.activePlayerIndex).toBe(0);
   });
 
   it('advances the button clockwise on each subsequent hand', () => {
@@ -283,11 +283,11 @@ describe('round complete', () => {
 
 describe('last player standing', () => {
   it('transitions to showdown when only one player remains after a fold', () => {
-    // Heads-up: Alice(0)=button/SB, Bob(1)=BB/active(preflop). Bob folds → Alice wins.
+    // Heads-up: Alice(0)=button/SB acts first. Alice folds → Bob wins.
     const hand = makeHand(['Alice', 'Bob']);
-    // Heads-up: activePlayerIndex = 1 (Bob, BB acts first preflop)
-    expect(hand.activePlayerIndex).toBe(1);
-    const result = fold(hand, hand.players[1].id);
+    // Heads-up: activePlayerIndex = 0 (Alice, button/SB acts first preflop)
+    expect(hand.activePlayerIndex).toBe(0);
+    const result = fold(hand, hand.players[0].id);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.state.phase).toBe('showdown');

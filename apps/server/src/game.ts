@@ -62,9 +62,9 @@ export function newHand(state: GameState): GameResult {
   const sbIndex =
     activePlayers.length === 2 ? buttonIndex : nextActiveIndex(state.players, buttonIndex);
   const bbIndex = nextActiveIndex(state.players, sbIndex);
-  // Heads-up: BB acts first pre-flop (button/SB acts last)
+  // Heads-up: button/SB acts first pre-flop; 3+ players: UTG is next clockwise after BB
   const utgIndex =
-    activePlayers.length === 2 ? bbIndex : nextActiveIndex(state.players, bbIndex);
+    activePlayers.length === 2 ? buttonIndex : nextActiveIndex(state.players, bbIndex);
 
   const players = state.players.map((p) => ({ ...p, currentBet: 0, isAllIn: false, isFolded: false, hasActedThisRound: false }));
   const log: LogEntry[] = [...state.log];

@@ -370,6 +370,22 @@ function GameScreen({
   const callAmount = me ? Math.max(0, state.currentBet - me.currentBet) : 0;
   const canCheck = isMyTurn && state.currentBet === (me?.currentBet ?? 0);
 
+  // Compute SB/BB indices for badge display (only valid once a hand has started)
+  const hasHand = state.dealerButtonIndex >= 0;
+  const nonElim = (from: number) => {
+    const n = state.players.length;
+    for (let i = 1; i <= n; i++) {
+      const idx = (from + i) % n;
+      if (!state.players[idx].isEliminated) return idx;
+    }
+    return from;
+  };
+  const activePlayers = state.players.filter((p) => !p.isEliminated);
+  const sbIdx = hasHand
+    ? (activePlayers.length === 2 ? state.dealerButtonIndex : nonElim(state.dealerButtonIndex))
+    : -1;
+  const bbIdx = hasHand ? nonElim(sbIdx) : -1;
+
   return (
     <div className="min-h-screen bg-slate-900 p-4">
       <div className="max-w-sm mx-auto pt-8">
@@ -383,6 +399,8 @@ function GameScreen({
           {state.players.map((p, i) => {
             const isButton = i === state.dealerButtonIndex;
             const isActive = i === state.activePlayerIndex;
+            const isSB = i === sbIdx;
+            const isBB = i === bbIdx;
             return (
               <li
                 key={p.id}
@@ -392,6 +410,12 @@ function GameScreen({
                 <span className="flex items-center gap-2">
                   {isButton && (
                     <span className="text-xs bg-yellow-600 text-yellow-100 px-1.5 py-0.5 rounded-full font-mono">D</span>
+                  )}
+                  {isSB && (
+                    <span data-testid={`badge-sb-${p.displayName}`} className="text-xs bg-blue-700 text-blue-100 px-1.5 py-0.5 rounded-full font-mono">SB</span>
+                  )}
+                  {isBB && (
+                    <span data-testid={`badge-bb-${p.displayName}`} className="text-xs bg-violet-700 text-violet-100 px-1.5 py-0.5 rounded-full font-mono">BB</span>
                   )}
                   <span className={p.id === myPlayerId ? 'text-emerald-400 font-semibold' : p.isFolded ? 'text-slate-600 line-through' : 'text-white'}>
                     {p.displayName}
