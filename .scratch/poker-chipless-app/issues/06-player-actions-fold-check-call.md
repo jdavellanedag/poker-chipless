@@ -1,10 +1,10 @@
 ---
-status: pending
+status: done
 ---
 
 # Player Actions — Fold / Check / Call
 
-> **Status:** `pending`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._

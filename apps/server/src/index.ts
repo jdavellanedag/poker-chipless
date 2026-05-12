@@ -6,7 +6,7 @@ import express from 'express';
 import { Server } from 'socket.io';
 import type { ServerToClientEvents, ClientToServerEvents, GameState, CreateAckResponse, JoinAckResponse } from '@poker-chipless/types';
 import { createSession, joinSession } from './session.js';
-import { startGame, reorderPlayers, newHand } from './game.js';
+import { startGame, reorderPlayers, newHand, fold, check, call } from './game.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -118,6 +118,39 @@ io.on('connection', (socket) => {
     const player = session.state.players.find((p) => p.id === playerId);
     if (!player?.isHost) { ack({ ok: false, error: 'Only the host can start a new hand.' }); return; }
     const result = newHand(session.state);
+    if (!result.ok) { ack({ ok: false, error: result.error }); return; }
+    session.state = result.state;
+    io.to(code!).emit('game:state', session.state);
+    ack({ ok: true });
+  });
+
+  socket.on('action:fold', (_payload, ack) => {
+    const { code, playerId } = socket.data as { code?: string; playerId?: string };
+    const session = code ? sessions.get(code) : undefined;
+    if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
+    const result = fold(session.state, playerId ?? '');
+    if (!result.ok) { ack({ ok: false, error: result.error }); return; }
+    session.state = result.state;
+    io.to(code!).emit('game:state', session.state);
+    ack({ ok: true });
+  });
+
+  socket.on('action:check', (_payload, ack) => {
+    const { code, playerId } = socket.data as { code?: string; playerId?: string };
+    const session = code ? sessions.get(code) : undefined;
+    if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
+    const result = check(session.state, playerId ?? '');
+    if (!result.ok) { ack({ ok: false, error: result.error }); return; }
+    session.state = result.state;
+    io.to(code!).emit('game:state', session.state);
+    ack({ ok: true });
+  });
+
+  socket.on('action:call', (_payload, ack) => {
+    const { code, playerId } = socket.data as { code?: string; playerId?: string };
+    const session = code ? sessions.get(code) : undefined;
+    if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
+    const result = call(session.state, playerId ?? '');
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
