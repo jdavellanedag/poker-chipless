@@ -59,16 +59,11 @@ test.describe('Player action buttons', () => {
     // After Bob checks, Alice must call 10 (currentBet=20, Alice.currentBet=10).
     const { hostCtx, hostPage, bobCtx, bobPage } = await startHandWith2Players(browser);
 
-    // Bob checks (BB, no open raise against him)
+    // Bob (BB) checks — preflop heads-up, BB acts first. No raise, so SB (Alice) still needs to act.
     await expect(bobPage.getByTestId('btn-check')).toBeVisible();
     await bobPage.getByTestId('btn-check').click();
 
-    // Now Alice is active and must call 10 (she posted SB=10, currentBet still 20? No—
-    // after Bob checks the round is complete preflop in heads-up... actually wait:
-    // Heads-up preflop: Alice=SB(10), Bob=BB(20). Bob acts first.
-    // If Bob checks, preflop round is complete (SB still needs to act).
-    // Actually no: heads-up preflop, BB acts first, then SB. If BB checks, SB can call/raise/fold.
-    // Alice posted SB=10, currentBet=20. Alice must call 10 more.
+    // Alice posted SB=10, currentBet=20 → call amount = 10
     await expect(hostPage.getByTestId('action-buttons')).toBeVisible();
     await expect(hostPage.getByTestId('btn-call')).toHaveText('Call 10');
 
