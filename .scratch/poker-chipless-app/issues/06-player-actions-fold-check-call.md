@@ -1,10 +1,10 @@
 ---
-status: pending
+status: in-progress
 ---
 
 # Player Actions — Fold / Check / Call
 
-> **Status:** `pending`
+> **Status:** `in-progress`
 
 ## Clarification
 _No open questions._
