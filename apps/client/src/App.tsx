@@ -81,9 +81,30 @@ export default function App() {
     socket.emit('host:new-hand', {}, () => {});
   }
 
+  function handleFold() {
+    socket.emit('action:fold', {}, () => {});
+  }
+
+  function handleCheck() {
+    socket.emit('action:check', {}, () => {});
+  }
+
+  function handleCall() {
+    socket.emit('action:call', {}, () => {});
+  }
+
   if (gameState) {
     if (gameState.phase === 'active') {
-      return <GameScreen state={gameState} myPlayerId={myPlayerId} onNewHand={handleNewHand} />;
+      return (
+        <GameScreen
+          state={gameState}
+          myPlayerId={myPlayerId}
+          onNewHand={handleNewHand}
+          onFold={handleFold}
+          onCheck={handleCheck}
+          onCall={handleCall}
+        />
+      );
     }
     return (
       <LobbyScreen
@@ -332,13 +353,22 @@ function GameScreen({
   state,
   myPlayerId,
   onNewHand,
+  onFold,
+  onCheck,
+  onCall,
 }: {
   state: GameState;
   myPlayerId: string;
   onNewHand: () => void;
+  onFold: () => void;
+  onCheck: () => void;
+  onCall: () => void;
 }) {
   const me = state.players.find((p) => p.id === myPlayerId);
   const isHost = me?.isHost ?? false;
+  const isMyTurn = state.players[state.activePlayerIndex]?.id === myPlayerId;
+  const callAmount = me ? Math.max(0, state.currentBet - me.currentBet) : 0;
+  const canCheck = isMyTurn && state.currentBet === (me?.currentBet ?? 0);
 
   return (
     <div className="min-h-screen bg-slate-900 p-4">
@@ -352,17 +382,18 @@ function GameScreen({
         <ul className="space-y-2 mb-6">
           {state.players.map((p, i) => {
             const isButton = i === state.dealerButtonIndex;
+            const isActive = i === state.activePlayerIndex;
             return (
               <li
                 key={p.id}
                 data-testid={`player-row-${p.displayName}`}
-                className="flex justify-between items-center bg-slate-800 rounded-lg px-4 py-3"
+                className={`flex justify-between items-center rounded-lg px-4 py-3 ${isActive ? 'bg-slate-700 ring-1 ring-emerald-500' : 'bg-slate-800'}`}
               >
                 <span className="flex items-center gap-2">
                   {isButton && (
                     <span className="text-xs bg-yellow-600 text-yellow-100 px-1.5 py-0.5 rounded-full font-mono">D</span>
                   )}
-                  <span className={p.id === myPlayerId ? 'text-emerald-400 font-semibold' : 'text-white'}>
+                  <span className={p.id === myPlayerId ? 'text-emerald-400 font-semibold' : p.isFolded ? 'text-slate-600 line-through' : 'text-white'}>
                     {p.displayName}
                   </span>
                 </span>
@@ -376,6 +407,35 @@ function GameScreen({
             );
           })}
         </ul>
+
+        {isMyTurn && !state.roundComplete && (
+          <div data-testid="action-buttons" className="flex gap-2 mb-4">
+            <button
+              data-testid="btn-fold"
+              onClick={onFold}
+              className="flex-1 bg-red-700 hover:bg-red-600 text-white font-semibold py-2 rounded"
+            >
+              Fold
+            </button>
+            {canCheck ? (
+              <button
+                data-testid="btn-check"
+                onClick={onCheck}
+                className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-semibold py-2 rounded"
+              >
+                Check
+              </button>
+            ) : (
+              <button
+                data-testid="btn-call"
+                onClick={onCall}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded"
+              >
+                Call {callAmount}
+              </button>
+            )}
+          </div>
+        )}
 
         {isHost && (
           <button

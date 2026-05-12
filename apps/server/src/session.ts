@@ -32,6 +32,8 @@ export function createSession(displayName: string): { state: GameState; token: s
         isEliminated: false,
         isConnected: true,
         isAllIn: false,
+        isFolded: false,
+        hasActedThisRound: false,
         validActions: [],
       },
     ],
@@ -42,6 +44,7 @@ export function createSession(displayName: string): { state: GameState; token: s
     lastRaiseSize: 0,
     smallBlind: 0,
     bigBlind: 0,
+    roundComplete: false,
     log: [],
   };
   return { state, token };
@@ -68,6 +71,8 @@ export function joinSession(
     isEliminated: false,
     isConnected: true,
     isAllIn: false,
+    isFolded: false,
+    hasActedThisRound: false,
     validActions: [] as GameState['players'][0]['validActions'],
   };
   return {

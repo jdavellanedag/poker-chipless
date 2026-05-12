@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createSession, joinSession } from '../session.js';
-import { startGame, reorderPlayers, newHand } from '../game.js';
+import { startGame, reorderPlayers, newHand, fold, check, call } from '../game.js';
 
 function makelobby(playerNames: string[]) {
   const [host, ...rest] = playerNames;
@@ -212,5 +212,167 @@ describe('newHand', () => {
     expect(s.pot).toBe(30);                        // 10 + 20
     expect(s.currentBet).toBe(20);                 // = bigBlind
     expect(s.activePlayerIndex).toBe(0);           // UTG = Alice (wraps after BB at index 2)
+  });
+});
+
+// helpers for action tests
+function makeHand(playerNames: string[], startingStack = 1000, smallBlind = 10, bigBlind = 20) {
+  const active = makeActive(playerNames, startingStack, smallBlind, bigBlind);
+  const result = newHand(active);
+  if (!result.ok) throw new Error(result.error);
+  return result.state;
+}
+
+describe('turn advancement', () => {
+  it('skips folded players when advancing after fold', () => {
+    // 4-player: Alice(0)=button, Bob(1)=SB, Carol(2)=BB, Dave(3)=UTG=active.
+    // Pre-fold Alice so when Dave folds the turn goes to Bob(1), not Alice(0).
+    const hand = makeHand(['Alice', 'Bob', 'Carol', 'Dave']);
+    expect(hand.activePlayerIndex).toBe(3); // Dave is UTG
+    const withAliceFolded = {
+      ...hand,
+      players: hand.players.map((p) => p.displayName === 'Alice' ? { ...p, isFolded: true } : p),
+    };
+    const result = fold(withAliceFolded, withAliceFolded.players[3].id); // Dave folds
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.activePlayerIndex).toBe(1); // skips Alice(0), lands on Bob(1)
+  });
+
+  it('skips eliminated players when advancing after fold', () => {
+    const hand = makeHand(['Alice', 'Bob', 'Carol', 'Dave']);
+    const withAliceEliminated = {
+      ...hand,
+      players: hand.players.map((p) => p.displayName === 'Alice' ? { ...p, isEliminated: true } : p),
+    };
+    const result = fold(withAliceEliminated, withAliceEliminated.players[3].id); // Dave folds
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.activePlayerIndex).toBe(1); // skips Alice(0), lands on Bob(1)
+  });
+});
+
+describe('round complete', () => {
+  it('sets roundComplete and logs when all active players have matched currentBet', () => {
+    // Post-flop: currentBet=0, all players have currentBet=0 — first check completes the round
+    const hand = makeHand(['Alice', 'Bob']);
+    const flopState = {
+      ...hand,
+      round: 'flop' as const,
+      currentBet: 0,
+      roundComplete: false,
+      activePlayerIndex: 0,
+      players: hand.players.map((p) => ({ ...p, currentBet: 0 })),
+    };
+    // Alice checks — Bob still needs to act, round not complete yet
+    const afterAlice = check(flopState, flopState.players[0].id);
+    expect(afterAlice.ok).toBe(true);
+    if (!afterAlice.ok) return;
+    expect(afterAlice.state.roundComplete).toBe(false);
+
+    // Bob checks — both have currentBet=0 === currentBet=0, round complete
+    const afterBob = check(afterAlice.state, afterAlice.state.players[1].id);
+    expect(afterBob.ok).toBe(true);
+    if (!afterBob.ok) return;
+    expect(afterBob.state.roundComplete).toBe(true);
+    expect(afterBob.state.log.map((e) => e.message)).toContain(
+      'Betting round complete. Host may advance.',
+    );
+  });
+});
+
+describe('last player standing', () => {
+  it('transitions to showdown when only one player remains after a fold', () => {
+    // Heads-up: Alice(0)=button/SB, Bob(1)=BB/active(preflop). Bob folds → Alice wins.
+    const hand = makeHand(['Alice', 'Bob']);
+    // Heads-up: activePlayerIndex = 1 (Bob, BB acts first preflop)
+    expect(hand.activePlayerIndex).toBe(1);
+    const result = fold(hand, hand.players[1].id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.phase).toBe('showdown');
+  });
+});
+
+describe('fold', () => {
+  it('rejects action from non-active player', () => {
+    const state = makeHand(['Alice', 'Bob', 'Carol']); // Alice is active (UTG)
+    const result = fold(state, state.players[1].id);   // Bob tries to act
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBeTruthy();
+  });
+
+  it('marks active player as folded, advances turn, and logs "Alice folds"', () => {
+    // 3-player: Alice=button/UTG(idx0), Bob=SB(idx1), Carol=BB(idx2). Active = Alice.
+    const state = makeHand(['Alice', 'Bob', 'Carol']);
+
+    const result = fold(state, state.players[0].id);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.players[0].isFolded).toBe(true);
+    expect(result.state.activePlayerIndex).toBe(1); // Bob is next
+    expect(result.state.log.map((e) => e.message)).toContain('Alice folds');
+  });
+});
+
+describe('check', () => {
+  it('rejects action from non-active player', () => {
+    const hand = makeHand(['Alice', 'Bob', 'Carol']);
+    const flopState = { ...hand, round: 'flop' as const, currentBet: 0, activePlayerIndex: 1,
+      players: hand.players.map((p) => ({ ...p, currentBet: 0 })) };
+    const result = check(flopState, flopState.players[2].id); // Carol tries, Bob is active
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects check when a bet is open', () => {
+    const state = makeHand(['Alice', 'Bob', 'Carol']); // currentBet=20, Alice.currentBet=0
+    const result = check(state, state.players[0].id);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBeTruthy();
+  });
+
+  it('advances turn and logs "Bob checks" when no open bet', () => {
+    // Simulate post-flop: currentBet=0, all players' currentBet=0, Bob acts first.
+    const hand = makeHand(['Alice', 'Bob', 'Carol']);
+    const flopState = {
+      ...hand,
+      round: 'flop' as const,
+      currentBet: 0,
+      activePlayerIndex: 1,
+      players: hand.players.map((p) => ({ ...p, currentBet: 0 })),
+    };
+
+    const result = check(flopState, flopState.players[1].id);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.activePlayerIndex).toBe(2); // Carol is next
+    expect(result.state.log.map((e) => e.message)).toContain('Bob checks');
+  });
+});
+
+describe('call', () => {
+  it('rejects action from non-active player', () => {
+    const state = makeHand(['Alice', 'Bob', 'Carol']); // Alice is active
+    const result = call(state, state.players[2].id);   // Carol tries
+    expect(result.ok).toBe(false);
+  });
+
+  it('deducts call amount from chips, adds to pot, advances turn, and logs "Alice calls 20"', () => {
+    // 3-player: Alice=UTG(idx0), currentBet=20, Alice.currentBet=0 → call amount = 20.
+    const state = makeHand(['Alice', 'Bob', 'Carol']);
+
+    const result = call(state, state.players[0].id);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.players[0].chipCount).toBe(980); // 1000 - 20
+    expect(result.state.players[0].currentBet).toBe(20);
+    expect(result.state.pot).toBe(50);                   // 30 + 20
+    expect(result.state.activePlayerIndex).toBe(1);      // Bob is next
+    expect(result.state.log.map((e) => e.message)).toContain('Alice calls 20');
   });
 });

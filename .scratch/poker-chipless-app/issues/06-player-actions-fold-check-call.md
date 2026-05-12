@@ -1,10 +1,10 @@
 ---
-status: in-progress
+status: done
 ---
 
 # Player Actions — Fold / Check / Call
 
-> **Status:** `in-progress`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._

@@ -66,7 +66,7 @@ export function newHand(state: GameState): GameResult {
   const utgIndex =
     activePlayers.length === 2 ? bbIndex : nextActiveIndex(state.players, bbIndex);
 
-  const players = state.players.map((p) => ({ ...p, currentBet: 0, isAllIn: false }));
+  const players = state.players.map((p) => ({ ...p, currentBet: 0, isAllIn: false, isFolded: false, hasActedThisRound: false }));
   const log: LogEntry[] = [...state.log];
 
   const sbPlayer = players[sbIndex];
@@ -105,9 +105,112 @@ export function newHand(state: GameState): GameResult {
       pot: sbAmount + bbAmount,
       currentBet: state.bigBlind,
       lastRaiseSize: state.bigBlind,
+      roundComplete: false,
       players,
       log,
     },
+  };
+}
+
+function nextFoldAwareIndex(players: GameState['players'], fromIndex: number): number {
+  const n = players.length;
+  for (let i = 1; i <= n; i++) {
+    const idx = (fromIndex + i) % n;
+    if (!players[idx].isEliminated && !players[idx].isFolded) return idx;
+  }
+  return fromIndex;
+}
+
+function detectRoundComplete(state: GameState): GameState {
+  const contesting = state.players.filter((p) => !p.isFolded && !p.isEliminated);
+  const allActed = contesting.every((p) => p.isAllIn || p.hasActedThisRound);
+  const allMatched = contesting.every((p) => p.isAllIn || p.currentBet === state.currentBet);
+  if (!allActed || !allMatched || state.roundComplete) return state;
+  return {
+    ...state,
+    roundComplete: true,
+    log: [
+      ...state.log,
+      { timestamp: new Date().toISOString(), message: 'Betting round complete. Host may advance.' },
+    ],
+  };
+}
+
+export function fold(state: GameState, playerId: string): GameResult {
+  if (state.phase !== 'active') {
+    return { ok: false, error: 'Game is not active.' };
+  }
+  const activePlayer = state.players[state.activePlayerIndex];
+  if (activePlayer.id !== playerId) {
+    return { ok: false, error: 'It is not your turn.' };
+  }
+
+  const players = state.players.map((p, i) =>
+    i === state.activePlayerIndex ? { ...p, isFolded: true, hasActedThisRound: true } : p,
+  );
+  const log = [
+    ...state.log,
+    { timestamp: new Date().toISOString(), message: `${activePlayer.displayName} folds` },
+  ];
+
+  const contesting = players.filter((p) => !p.isFolded && !p.isEliminated);
+  if (contesting.length === 1) {
+    return { ok: true, state: { ...state, players, log, phase: 'showdown' } };
+  }
+
+  const nextIndex = nextFoldAwareIndex(players, state.activePlayerIndex);
+  return { ok: true, state: detectRoundComplete({ ...state, players, log, activePlayerIndex: nextIndex }) };
+}
+
+export function check(state: GameState, playerId: string): GameResult {
+  if (state.phase !== 'active') {
+    return { ok: false, error: 'Game is not active.' };
+  }
+  const activePlayer = state.players[state.activePlayerIndex];
+  if (activePlayer.id !== playerId) {
+    return { ok: false, error: 'It is not your turn.' };
+  }
+  if (state.currentBet !== activePlayer.currentBet) {
+    return { ok: false, error: 'Cannot check when there is an open bet.' };
+  }
+
+  const players = state.players.map((p, i) =>
+    i === state.activePlayerIndex ? { ...p, hasActedThisRound: true } : p,
+  );
+  const log = [
+    ...state.log,
+    { timestamp: new Date().toISOString(), message: `${activePlayer.displayName} checks` },
+  ];
+
+  const nextIndex = nextFoldAwareIndex(players, state.activePlayerIndex);
+  return { ok: true, state: detectRoundComplete({ ...state, players, log, activePlayerIndex: nextIndex }) };
+}
+
+export function call(state: GameState, playerId: string): GameResult {
+  if (state.phase !== 'active') {
+    return { ok: false, error: 'Game is not active.' };
+  }
+  const activePlayer = state.players[state.activePlayerIndex];
+  if (activePlayer.id !== playerId) {
+    return { ok: false, error: 'It is not your turn.' };
+  }
+  const callAmount = Math.max(0, state.currentBet - activePlayer.currentBet);
+  const actualAmount = Math.min(callAmount, activePlayer.chipCount);
+
+  const players = state.players.map((p, i) =>
+    i === state.activePlayerIndex
+      ? { ...p, chipCount: p.chipCount - actualAmount, currentBet: p.currentBet + actualAmount, hasActedThisRound: true }
+      : p,
+  );
+  const log = [
+    ...state.log,
+    { timestamp: new Date().toISOString(), message: `${activePlayer.displayName} calls ${actualAmount}` },
+  ];
+
+  const nextIndex = nextFoldAwareIndex(players, state.activePlayerIndex);
+  return {
+    ok: true,
+    state: detectRoundComplete({ ...state, players, log, pot: state.pot + actualAmount, activePlayerIndex: nextIndex }),
   };
 }
 

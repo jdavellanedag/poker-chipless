@@ -16,6 +16,8 @@ export interface Player {
   isEliminated: boolean;
   isConnected: boolean;
   isAllIn: boolean;
+  isFolded: boolean;
+  hasActedThisRound: boolean;
   validActions: ValidAction[];
 }
 
@@ -36,6 +38,7 @@ export interface GameState {
   smallBlind: number;
   /** @remarks integer only */
   bigBlind: number;
+  roundComplete: boolean;
   log: LogEntry[];
 }
 
