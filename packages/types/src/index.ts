@@ -38,6 +38,8 @@ export interface GameState {
   smallBlind: number;
   /** @remarks integer only */
   bigBlind: number;
+  /** @remarks integer only — starting chip count used as rebuy default */
+  startingStack: number;
   roundComplete: boolean;
   log: LogEntry[];
 }
