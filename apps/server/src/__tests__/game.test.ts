@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createSession, joinSession } from '../session.js';
-import { appendLog, startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, withValidActions, advanceRound, declareWinner, pause, resume, rebuy, autoFold } from '../game.js';
+import { appendLog, startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, withValidActions, advanceRound, declareWinner, pause, resume, rebuy, autoFold, endGame } from '../game.js';
 
 describe('appendLog', () => {
   it('appends an entry with the given message and an ISO timestamp to state.log', () => {
@@ -877,6 +877,26 @@ describe('declareWinner', () => {
     expect(aliceAfter.isEliminated).toBe(false);
   });
 
+  it('logs "Bob has been eliminated" when Bob reaches 0 chips after pot transfer', () => {
+    const hand = makeHand(['Alice', 'Bob']);
+    const state = {
+      ...hand,
+      phase: 'showdown' as const,
+      round: 'showdown' as const,
+      pot: 500,
+      players: hand.players.map((p) =>
+        p.displayName === 'Bob' ? { ...p, chipCount: 0 } : p,
+      ),
+    };
+    const alice = state.players.find((p) => p.displayName === 'Alice')!;
+
+    const result = declareWinner(state, alice.id);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.log.map((e) => e.message)).toContain('Bob has been eliminated');
+  });
+
   it('rejects when playerId does not exist', () => {
     const hand = makeHand(['Alice', 'Bob']);
     const result = declareWinner({ ...hand, phase: 'showdown' as const, pot: 100 }, 'non-existent-id');
@@ -1115,14 +1135,14 @@ describe('resume', () => {
 });
 
 describe('rebuy', () => {
-  it('adds chips to the player and logs "Alice re-buys 500 chips"', () => {
+  it('adds chips to the player and logs "Alice re-buys for 500 chips"', () => {
     const state = makeActive(['Alice', 'Bob']);
     const alice = state.players[0];
     const result = rebuy(state, alice.id, 500);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.state.players[0].chipCount).toBe(alice.chipCount + 500);
-    expect(result.state.log.map((e) => e.message)).toContain('Alice re-buys 500 chips');
+    expect(result.state.log.map((e) => e.message)).toContain('Alice re-buys for 500 chips');
   });
 
   it('un-eliminates a player who was eliminated', () => {
@@ -1175,6 +1195,31 @@ describe('autoFold', () => {
   it('rejects when the game is not active', () => {
     const state = { ...makeActive(['Alice', 'Bob']), phase: 'paused' as const };
     const result = autoFold(state, state.players[state.activePlayerIndex].id);
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('endGame', () => {
+  it('transitions to phase ended and logs "Game over — Alice wins!" when Alice is the last player with chips', () => {
+    const state = makeActive(['Alice', 'Bob']);
+    const withBobEliminated = {
+      ...state,
+      players: state.players.map((p) =>
+        p.displayName === 'Bob' ? { ...p, chipCount: 0, isEliminated: true } : p,
+      ),
+    };
+
+    const result = endGame(withBobEliminated);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.phase).toBe('ended');
+    expect(result.state.log.map((e) => e.message)).toContain('Game over — Alice wins!');
+  });
+
+  it('rejects when there are still 2 or more non-eliminated players', () => {
+    const state = makeActive(['Alice', 'Bob']);
+    const result = endGame(state);
     expect(result.ok).toBe(false);
   });
 });

@@ -6,7 +6,7 @@ import express from 'express';
 import { Server } from 'socket.io';
 import type { ServerToClientEvents, ClientToServerEvents, GameState, CreateAckResponse, JoinAckResponse } from '@poker-chipless/types';
 import { createSession, joinSession } from './session.js';
-import { appendLog, startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, advanceRound, declareWinner, pause, resume, rebuy, autoFold } from './game.js';
+import { appendLog, startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, advanceRound, declareWinner, pause, resume, rebuy, autoFold, endGame } from './game.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -166,7 +166,8 @@ io.on('connection', (socket) => {
     if (!player?.isHost) { ack({ ok: false, error: 'Only the host can start a new hand.' }); return; }
     const activePlayers = session.state.players.filter((p) => !p.isEliminated);
     if (activePlayers.length < 2) {
-      session.state = appendLog({ ...session.state, phase: 'ended' }, 'Game ended');
+      const endResult = endGame(session.state);
+      session.state = endResult.ok ? endResult.state : appendLog({ ...session.state, phase: 'ended' }, 'Game over');
       io.to(code!).emit('game:state', session.state);
       ack({ ok: true });
       return;

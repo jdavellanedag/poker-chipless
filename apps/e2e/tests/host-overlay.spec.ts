@@ -136,15 +136,25 @@ test.describe('Host overlay — pause and resume', () => {
 });
 
 test.describe('Host overlay — rebuy UI', () => {
-  test('host sees rebuy section with player dropdown, amount input, and disabled button', async ({ browser }) => {
+  test('host sees rebuy section with player dropdown, amount input, and enabled button', async ({ browser }) => {
     const { hostCtx, hostPage, bobCtx, bobPage } = await startAndCompletePreflop(browser);
 
     await expect(hostPage.getByTestId('rebuy-player-select')).toBeVisible();
     await expect(hostPage.getByTestId('rebuy-amount-input')).toBeVisible();
-    await expect(hostPage.getByTestId('rebuy-btn')).toBeDisabled();
+    await expect(hostPage.getByTestId('rebuy-btn')).toBeEnabled();
 
     // Non-host does not see rebuy controls
     await expect(bobPage.getByTestId('rebuy-player-select')).not.toBeVisible();
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+
+  test('rebuy button is disabled when amount is cleared', async ({ browser }) => {
+    const { hostCtx, hostPage, bobCtx } = await startAndCompletePreflop(browser);
+
+    await hostPage.getByTestId('rebuy-amount-input').fill('');
+    await expect(hostPage.getByTestId('rebuy-btn')).toBeDisabled();
 
     await hostCtx.close();
     await bobCtx.close();

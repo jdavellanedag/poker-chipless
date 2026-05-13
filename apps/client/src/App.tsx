@@ -121,11 +121,19 @@ export default function App() {
     socket.emit('host:resume', {}, () => {});
   }
 
+  function handleRebuy(playerId: string, amount: number) {
+    socket.emit('host:rebuy', { playerId, amount }, () => {});
+  }
+
   if (gameState) {
     if (gameState.phase === 'ended') {
+      const lastLog = gameState.log[gameState.log.length - 1];
       return (
         <CenteredCard>
           <h1 className="text-2xl font-bold text-white mb-4">Game Over</h1>
+          {lastLog && (
+            <p className="text-slate-300 text-center mb-4">{lastLog.message}</p>
+          )}
           <ul className="space-y-2">
             {gameState.players.filter((p) => !p.isEliminated).map((p) => (
               <li key={p.id} className="text-emerald-400 font-semibold text-lg text-center">
@@ -152,6 +160,7 @@ export default function App() {
           onAllin={handleAllin}
           onPause={handlePause}
           onResume={handleResume}
+          onRebuy={handleRebuy}
         />
       );
     }
@@ -414,6 +423,7 @@ function GameScreen({
   onAllin,
   onPause,
   onResume,
+  onRebuy,
 }: {
   state: GameState;
   myPlayerId: string;
@@ -428,6 +438,7 @@ function GameScreen({
   onAllin: () => void;
   onPause: () => void;
   onResume: () => void;
+  onRebuy: (playerId: string, amount: number) => void;
 }) {
   const me = state.players.find((p) => p.id === myPlayerId);
   const isHost = me?.isHost ?? false;
@@ -508,6 +519,9 @@ function GameScreen({
                     )}
                     {isBB && (
                       <span data-testid={`badge-bb-${p.displayName}`} className="text-xs bg-violet-700 text-violet-100 px-1.5 py-0.5 rounded-full font-mono">BB</span>
+                    )}
+                    {p.isEliminated && (
+                      <span data-testid={`badge-eliminated-${p.displayName}`} className="text-xs bg-red-900 text-red-300 px-1.5 py-0.5 rounded-full font-mono">Eliminated</span>
                     )}
                     <span className={p.id === myPlayerId ? 'text-emerald-400 font-semibold' : p.isFolded ? 'text-slate-600 line-through' : 'text-white'}>
                       {p.displayName}
@@ -612,6 +626,7 @@ function GameScreen({
               onDeclareWinner={onDeclareWinner}
               onPause={onPause}
               onResume={onResume}
+              onRebuy={onRebuy}
             />
           )}
 
@@ -636,6 +651,7 @@ function HostPanel({
   onDeclareWinner,
   onPause,
   onResume,
+  onRebuy,
 }: {
   state: GameState;
   onNewHand: () => void;
@@ -643,9 +659,12 @@ function HostPanel({
   onDeclareWinner: (playerId: string) => void;
   onPause: () => void;
   onResume: () => void;
+  onRebuy: (playerId: string, amount: number) => void;
 }) {
   const [rebuyPlayerId, setRebuyPlayerId] = useState(state.players[0]?.id ?? '');
   const [rebuyAmount, setRebuyAmount] = useState(String(state.startingStack));
+  const parsedRebuyAmount = parseInt(rebuyAmount, 10);
+  const rebuyValid = !isNaN(parsedRebuyAmount) && parsedRebuyAmount > 0 && rebuyPlayerId !== '';
 
   return (
     <div className="mt-4 bg-slate-800 rounded-xl p-4 space-y-3">
@@ -701,8 +720,9 @@ function HostPanel({
           />
           <button
             data-testid="rebuy-btn"
-            disabled
-            className="flex-1 bg-slate-600 text-slate-400 font-semibold py-2 rounded cursor-not-allowed opacity-50"
+            disabled={!rebuyValid}
+            onClick={() => rebuyValid && onRebuy(rebuyPlayerId, parsedRebuyAmount)}
+            className={`flex-1 font-semibold py-2 rounded ${rebuyValid ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-slate-600 text-slate-400 cursor-not-allowed opacity-50'}`}
           >
             Rebuy
           </button>
