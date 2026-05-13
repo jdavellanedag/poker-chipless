@@ -1,7 +1,7 @@
 # Bug: Action buttons visible on player screen during showdown
 
 > **Branch:** `bugfix/action-buttons-visible-in-showdown`
-> **Status:** fixed
+> **Status:** merged
 
 ## Description
 
