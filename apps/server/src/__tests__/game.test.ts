@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createSession, joinSession } from '../session.js';
-import { startGame, reorderPlayers, newHand, fold, check, call } from '../game.js';
+import { startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, withValidActions } from '../game.js';
 
 function makelobby(playerNames: string[]) {
   const [host, ...rest] = playerNames;
@@ -479,5 +479,245 @@ describe('call', () => {
     expect(alice.isAllIn).toBe(true);
     expect(alice.currentBet).toBe(15); // 10 (SB posted) + 5 (all she had left)
     expect(result.state.pot).toBe(35); // 30 (blinds) + 5 (Alice's remaining stack)
+  });
+});
+
+function makeFlopState(playerNames: string[], startingStack = 1000, smallBlind = 10, bigBlind = 20) {
+  const hand = makeHand(playerNames, startingStack, smallBlind, bigBlind);
+  return withValidActions({
+    ...hand,
+    round: 'flop' as const,
+    currentBet: 0,
+    lastRaiseSize: bigBlind,
+    pot: 0,
+    roundComplete: false,
+    activePlayerIndex: 0,
+    players: hand.players.map((p) => ({ ...p, currentBet: 0, hasActedThisRound: false })),
+  });
+}
+
+describe('raise', () => {
+  it('increases currentBet, deducts chips, adds to pot, and logs "Alice raises to 800"', () => {
+    // Preflop: currentBet=20 (BB). Alice(UTG, idx0) raises to 800.
+    // Alice.currentBet=0, so she puts in 800 total. Net deduction = 800.
+    const hand = makeHand(['Alice', 'Bob', 'Carol']); // Alice(UTG), currentBet=20
+    const result = raise(hand, hand.players[0].id, 800);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.currentBet).toBe(800);
+    expect(result.state.players[0].chipCount).toBe(200);   // 1000 - 800
+    expect(result.state.players[0].currentBet).toBe(800);
+    expect(result.state.pot).toBe(30 + 800);               // blinds + raise
+    expect(result.state.log.map((e) => e.message)).toContain('Alice raises to 800');
+  });
+
+  it('rejects action from non-active player', () => {
+    const hand = makeHand(['Alice', 'Bob', 'Carol']); // Alice is active
+    const result = raise(hand, hand.players[1].id, 100);   // Bob tries
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects raise when there is no open bet', () => {
+    const state = makeFlopState(['Alice', 'Bob', 'Carol']); // currentBet=0
+    const result = raise(state, state.players[0].id, 100);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBeTruthy();
+  });
+
+  it('rejects raise below minimum (currentBet + lastRaiseSize)', () => {
+    // currentBet=20, lastRaiseSize=20 (bigBlind) → minimum raise = 40
+    const hand = makeHand(['Alice', 'Bob', 'Carol']);
+    const result = raise(hand, hand.players[0].id, 39); // below minimum of 40
+    expect(result.ok).toBe(false);
+  });
+
+  it('accepts raise exactly at minimum', () => {
+    // currentBet=20, lastRaiseSize=20 → minimum = 40
+    const hand = makeHand(['Alice', 'Bob', 'Carol']);
+    const result = raise(hand, hand.players[0].id, 40);
+    expect(result.ok).toBe(true);
+  });
+
+  it('updates lastRaiseSize to the raise increment', () => {
+    // Raise to 100 when currentBet=20 → increment = 80
+    const hand = makeHand(['Alice', 'Bob', 'Carol']);
+    const result = raise(hand, hand.players[0].id, 100);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.lastRaiseSize).toBe(80); // 100 - 20
+  });
+
+  it('re-opens betting for players who already acted when a raise occurs', () => {
+    // 3-player: Alice(idx0)=UTG calls, Bob(idx1)=SB calls, then Carol(idx2)=BB raises.
+    // After Carol raises, Alice and Bob who already called must act again.
+    const hand = makeHand(['Alice', 'Bob', 'Carol']);
+    // Alice calls
+    const afterAlice = call(hand, hand.players[0].id);
+    expect(afterAlice.ok).toBe(true);
+    if (!afterAlice.ok) return;
+    // Bob (SB) calls
+    const afterBob = call(afterAlice.state, afterAlice.state.players[afterAlice.state.activePlayerIndex].id);
+    expect(afterBob.ok).toBe(true);
+    if (!afterBob.ok) return;
+    // Carol (BB) raises to 60
+    const carolIdx = afterBob.state.activePlayerIndex;
+    const afterCarol = raise(afterBob.state, afterBob.state.players[carolIdx].id, 60);
+    expect(afterCarol.ok).toBe(true);
+    if (!afterCarol.ok) return;
+    // Alice and Bob must have hasActedThisRound reset to false
+    expect(afterCarol.state.players[0].hasActedThisRound).toBe(false); // Alice
+    expect(afterCarol.state.players[1].hasActedThisRound).toBe(false); // Bob
+    expect(afterCarol.state.players[2].hasActedThisRound).toBe(true);  // Carol (the raiser)
+  });
+});
+
+describe('validActions', () => {
+  it('active player with no open bet can bet, check, and fold', () => {
+    const state = makeFlopState(['Alice', 'Bob', 'Carol']); // currentBet=0, Alice active
+    const alice = state.players[0];
+    expect(alice.validActions).toContain('bet');
+    expect(alice.validActions).toContain('check');
+    expect(alice.validActions).toContain('fold');
+    expect(alice.validActions).not.toContain('call');
+    expect(alice.validActions).not.toContain('raise');
+  });
+
+  it('active player with open bet can call, raise, fold, and allin — but not check', () => {
+    const hand = makeHand(['Alice', 'Bob', 'Carol']); // preflop: currentBet=20, Alice active
+    const alice = hand.players[0];
+    expect(alice.validActions).toContain('call');
+    expect(alice.validActions).toContain('raise');
+    expect(alice.validActions).toContain('fold');
+    expect(alice.validActions).toContain('allin');
+    expect(alice.validActions).not.toContain('check');
+    expect(alice.validActions).not.toContain('bet');
+  });
+
+  it('active player whose stack cannot cover the call gets allin and fold only', () => {
+    // Alice has 5 chips left, currentBet=20, Alice.currentBet=0 → call amount=20 > 5
+    const hand = makeHand(['Alice', 'Bob', 'Carol']);
+    const aliceShort = { ...hand.players[0], chipCount: 5 };
+    const shortState = { ...hand, players: [aliceShort, hand.players[1], hand.players[2]] };
+    // Re-derive validActions by calling computeValidActions or re-running through a state broadcast
+    // Since validActions is computed during action execution, we can test it via newHand with short stack
+    // OR we can expose a computeValidActions helper. For now test through state.players after newHand.
+    const active = makeActive(['Alice', 'Bob', 'Carol'], 1000, 10, 20);
+    // Give Alice only 5 chips
+    const aliceWith5 = { ...active.players[0], chipCount: 5 };
+    const stateWith5 = { ...active, players: [aliceWith5, active.players[1], active.players[2]] };
+    const result = newHand(stateWith5);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Alice is UTG (idx0) in 3-player, she has 5 chips but currentBet=20 so call amount=20 > 5
+    const aliceInHand = result.state.players[0];
+    expect(aliceInHand.validActions).toContain('allin');
+    expect(aliceInHand.validActions).toContain('fold');
+    expect(aliceInHand.validActions).not.toContain('call');
+    expect(aliceInHand.validActions).not.toContain('raise');
+  });
+
+  it('non-active players have empty validActions', () => {
+    const hand = makeHand(['Alice', 'Bob', 'Carol']); // Alice is active
+    expect(hand.players[1].validActions).toHaveLength(0); // Bob
+    expect(hand.players[2].validActions).toHaveLength(0); // Carol
+  });
+});
+
+describe('allin', () => {
+  it('sets chipCount to 0, isAllIn to true, adds all chips to pot, and logs "Alice goes all-in for 350"', () => {
+    // Post-flop: Alice has 350 chips, no open bet.
+    const state = makeFlopState(['Alice', 'Bob', 'Carol']);
+    const shortAlice = { ...state.players[0], chipCount: 350 };
+    const shortState = { ...state, players: [shortAlice, state.players[1], state.players[2]] };
+
+    const result = allin(shortState, shortAlice.id);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.players[0].chipCount).toBe(0);
+    expect(result.state.players[0].isAllIn).toBe(true);
+    expect(result.state.players[0].currentBet).toBe(350);
+    expect(result.state.pot).toBe(350);
+    expect(result.state.log.map((e) => e.message)).toContain('Alice goes all-in for 350');
+  });
+
+  it('rejects action from non-active player', () => {
+    const state = makeFlopState(['Alice', 'Bob', 'Carol']); // Alice is active
+    const result = allin(state, state.players[1].id);       // Bob tries
+    expect(result.ok).toBe(false);
+  });
+
+  it('always valid regardless of currentBet (no open bet)', () => {
+    const state = makeFlopState(['Alice', 'Bob', 'Carol']); // currentBet=0
+    const result = allin(state, state.players[0].id);
+    expect(result.ok).toBe(true);
+  });
+
+  it('always valid regardless of currentBet (open bet exists)', () => {
+    const hand = makeHand(['Alice', 'Bob', 'Carol']); // preflop currentBet=20
+    const result = allin(hand, hand.players[0].id);
+    expect(result.ok).toBe(true);
+  });
+
+  it('updates currentBet when all-in amount exceeds currentBet', () => {
+    // Alice goes all-in for 1000 when currentBet=20 → currentBet becomes 1000
+    const hand = makeHand(['Alice', 'Bob', 'Carol']);
+    const result = allin(hand, hand.players[0].id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.currentBet).toBe(1000); // Alice had 1000 chips
+  });
+});
+
+describe('bet', () => {
+  it('sets currentBet, deducts chips, adds to pot, and logs "Alice bets 400"', () => {
+    const state = makeFlopState(['Alice', 'Bob', 'Carol']);
+    const result = bet(state, state.players[0].id, 400);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.currentBet).toBe(400);
+    expect(result.state.players[0].chipCount).toBe(600);
+    expect(result.state.players[0].currentBet).toBe(400);
+    expect(result.state.pot).toBe(400);
+    expect(result.state.log.map((e) => e.message)).toContain('Alice bets 400');
+  });
+
+  it('rejects action from non-active player', () => {
+    const state = makeFlopState(['Alice', 'Bob', 'Carol']); // Alice is active (idx 0)
+    const result = bet(state, state.players[1].id, 100);    // Bob tries
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects bet when there is already an open bet', () => {
+    const hand = makeHand(['Alice', 'Bob', 'Carol']); // preflop: currentBet=20
+    const result = bet(hand, hand.players[0].id, 100);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBeTruthy();
+  });
+
+  it('rejects bet below the big blind minimum', () => {
+    const state = makeFlopState(['Alice', 'Bob', 'Carol']); // bigBlind=20
+    const result = bet(state, state.players[0].id, 10);     // less than 20
+    expect(result.ok).toBe(false);
+  });
+
+  it('sets lastRaiseSize to the bet amount', () => {
+    const state = makeFlopState(['Alice', 'Bob', 'Carol']);
+    const result = bet(state, state.players[0].id, 200);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.lastRaiseSize).toBe(200);
+  });
+
+  it('advances the turn to the next active player after bet', () => {
+    const state = makeFlopState(['Alice', 'Bob', 'Carol']); // Alice active (idx 0)
+    const result = bet(state, state.players[0].id, 100);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.activePlayerIndex).toBe(1); // Bob is next
   });
 });

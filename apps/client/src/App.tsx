@@ -93,6 +93,18 @@ export default function App() {
     socket.emit('action:call', {}, () => {});
   }
 
+  function handleBet(amount: number) {
+    socket.emit('action:bet', { amount }, () => {});
+  }
+
+  function handleRaise(amount: number) {
+    socket.emit('action:raise', { amount }, () => {});
+  }
+
+  function handleAllin() {
+    socket.emit('action:allin', {}, () => {});
+  }
+
   if (gameState) {
     if (gameState.phase === 'active') {
       return (
@@ -103,6 +115,9 @@ export default function App() {
           onFold={handleFold}
           onCheck={handleCheck}
           onCall={handleCall}
+          onBet={handleBet}
+          onRaise={handleRaise}
+          onAllin={handleAllin}
         />
       );
     }
@@ -356,6 +371,9 @@ function GameScreen({
   onFold,
   onCheck,
   onCall,
+  onBet,
+  onRaise,
+  onAllin,
 }: {
   state: GameState;
   myPlayerId: string;
@@ -363,12 +381,25 @@ function GameScreen({
   onFold: () => void;
   onCheck: () => void;
   onCall: () => void;
+  onBet: (amount: number) => void;
+  onRaise: (amount: number) => void;
+  onAllin: () => void;
 }) {
   const me = state.players.find((p) => p.id === myPlayerId);
   const isHost = me?.isHost ?? false;
   const isMyTurn = state.players[state.activePlayerIndex]?.id === myPlayerId;
   const callAmount = me ? Math.max(0, state.currentBet - me.currentBet) : 0;
   const canCheck = isMyTurn && state.currentBet === (me?.currentBet ?? 0);
+
+  const minBetOrRaise = state.currentBet === 0
+    ? state.bigBlind
+    : state.currentBet + state.lastRaiseSize;
+  const [betInput, setBetInput] = useState(String(minBetOrRaise));
+
+  const parsedBet = parseInt(betInput, 10);
+  const betInputValid = !isNaN(parsedBet) && parsedBet > 0 && parsedBet === Math.floor(parsedBet);
+  const canBet = isMyTurn && state.currentBet === 0 && betInputValid && parsedBet >= state.bigBlind && me !== undefined && parsedBet <= me.chipCount;
+  const canRaise = isMyTurn && state.currentBet > 0 && betInputValid && parsedBet >= minBetOrRaise && me !== undefined && parsedBet <= (me.currentBet + me.chipCount);
 
   // Compute SB/BB indices for badge display (only valid once a hand has started)
   const hasHand = state.dealerButtonIndex >= 0;
@@ -433,30 +464,80 @@ function GameScreen({
         </ul>
 
         {isMyTurn && !state.roundComplete && (
-          <div data-testid="action-buttons" className="flex gap-2 mb-4">
-            <button
-              data-testid="btn-fold"
-              onClick={onFold}
-              className="flex-1 bg-red-700 hover:bg-red-600 text-white font-semibold py-2 rounded"
-            >
-              Fold
-            </button>
-            {canCheck ? (
+          <div data-testid="action-buttons" className="space-y-2 mb-4">
+            <div className="flex gap-2">
               <button
-                data-testid="btn-check"
-                onClick={onCheck}
-                className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-semibold py-2 rounded"
+                data-testid="btn-fold"
+                onClick={onFold}
+                className="flex-1 bg-red-700 hover:bg-red-600 text-white font-semibold py-2 rounded"
               >
-                Check
+                Fold
               </button>
+              {canCheck ? (
+                <button
+                  data-testid="btn-check"
+                  onClick={onCheck}
+                  className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-semibold py-2 rounded"
+                >
+                  Check
+                </button>
+              ) : (
+                <button
+                  data-testid="btn-call"
+                  onClick={onCall}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded"
+                >
+                  Call {callAmount}
+                </button>
+              )}
+              <button
+                data-testid="btn-allin"
+                onClick={onAllin}
+                className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white font-semibold py-2 rounded"
+              >
+                All-In ({me?.chipCount ?? 0})
+              </button>
+            </div>
+            {state.currentBet === 0 ? (
+              <div className="flex gap-2">
+                <input
+                  data-testid="bet-input"
+                  type="number"
+                  min={state.bigBlind}
+                  step={1}
+                  value={betInput}
+                  onChange={(e) => setBetInput(e.target.value)}
+                  className="flex-1 bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  data-testid="btn-bet"
+                  onClick={() => { if (canBet) onBet(parsedBet); }}
+                  disabled={!canBet}
+                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded disabled:opacity-40"
+                >
+                  Bet {betInputValid ? parsedBet : ''}
+                </button>
+              </div>
             ) : (
-              <button
-                data-testid="btn-call"
-                onClick={onCall}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded"
-              >
-                Call {callAmount}
-              </button>
+              <div className="flex gap-2">
+                <input
+                  data-testid="raise-input"
+                  type="number"
+                  min={minBetOrRaise}
+                  step={1}
+                  value={betInput}
+                  onChange={(e) => setBetInput(e.target.value)}
+                  className="flex-1 bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  data-testid="btn-raise"
+                  onClick={() => { if (canRaise) onRaise(parsedBet); }}
+                  disabled={!canRaise}
+                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded disabled:opacity-40"
+                >
+                  Raise to {betInputValid ? parsedBet : ''}
+                </button>
+              </div>
             )}
           </div>
         )}

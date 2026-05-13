@@ -1,10 +1,10 @@
 ---
-status: in-progress
+status: done
 ---
 
 # Player Actions — Bet / Raise / All-In
 
-> **Status:** `in-progress`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._
