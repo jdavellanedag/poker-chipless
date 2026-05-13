@@ -31,8 +31,7 @@ async function startHandWith2Players(browser: Browser) {
   await hostPage.getByLabel(/small blind/i).fill('10');
   await hostPage.getByLabel(/big blind/i).fill('20');
   await hostPage.getByRole('button', { name: 'Start Game' }).click();
-  await expect(hostPage.getByTestId('new-hand-btn')).toBeVisible();
-  await hostPage.getByTestId('new-hand-btn').click();
+  // Start Game auto-deals the first hand — wait for blinds to be posted
   await expect(hostPage.getByTestId('pot')).toHaveText('30');
 
   return { hostCtx, hostPage, bobCtx, bobPage };
