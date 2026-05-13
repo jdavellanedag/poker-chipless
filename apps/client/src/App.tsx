@@ -396,10 +396,17 @@ function GameScreen({
     : state.currentBet + state.lastRaiseSize;
   const [betInput, setBetInput] = useState(String(minBetOrRaise));
 
+  // Reset input to new minimum whenever the active player changes or minimum shifts
+  useEffect(() => {
+    setBetInput(String(minBetOrRaise));
+  }, [state.activePlayerIndex, minBetOrRaise]);
+
   const parsedBet = parseInt(betInput, 10);
   const betInputValid = !isNaN(parsedBet) && parsedBet > 0 && parsedBet === Math.floor(parsedBet);
   const canBet = isMyTurn && state.currentBet === 0 && betInputValid && parsedBet >= state.bigBlind && me !== undefined && parsedBet <= me.chipCount;
   const canRaise = isMyTurn && state.currentBet > 0 && betInputValid && parsedBet >= minBetOrRaise && me !== undefined && parsedBet <= (me.currentBet + me.chipCount);
+  // Only show Call when the player can fully cover it; if they can't, All-In button covers it
+  const canCall = !canCheck && me !== undefined && me.chipCount > callAmount;
 
   // Compute SB/BB indices for badge display (only valid once a hand has started)
   const hasHand = state.dealerButtonIndex >= 0;
@@ -473,7 +480,7 @@ function GameScreen({
               >
                 Fold
               </button>
-              {canCheck ? (
+              {canCheck && (
                 <button
                   data-testid="btn-check"
                   onClick={onCheck}
@@ -481,7 +488,8 @@ function GameScreen({
                 >
                   Check
                 </button>
-              ) : (
+              )}
+              {canCall && (
                 <button
                   data-testid="btn-call"
                   onClick={onCall}

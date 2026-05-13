@@ -106,6 +106,29 @@ test.describe('Check during a hand', () => {
   });
 });
 
+test.describe('Auto all-in on call', () => {
+  test('player whose stack cannot cover the call sees no Call button — only All-In and Fold', async ({ browser }) => {
+    // Alice starts with 15 chips. Posts SB=10, has 5 left. Call amount = BB(20) - SB_posted(10) = 10.
+    // Alice.chipCount(5) <= callAmount(10) → Call is replaced by All-In.
+    const { ctx: hostCtx, page: hostPage, code } = await createSession(browser, 'Alice');
+    const { ctx: bobCtx } = await joinSession(browser, code, 'Bob');
+
+    await hostPage.getByLabel(/starting stack/i).fill('15');
+    await hostPage.getByLabel(/small blind/i).fill('10');
+    await hostPage.getByLabel(/big blind/i).fill('20');
+    await hostPage.getByRole('button', { name: 'Start Game' }).click();
+    await expect(hostPage.getByTestId('pot')).toBeVisible();
+
+    // Alice (SB/button) is active — she can't cover the 10-chip call, so Call must be hidden
+    await expect(hostPage.getByTestId('btn-call')).not.toBeVisible();
+    await expect(hostPage.getByTestId('btn-allin')).toBeVisible();
+    await expect(hostPage.getByTestId('btn-fold')).toBeVisible();
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+});
+
 test.describe('All-in during a hand', () => {
   test('"All-In (X)" button shows the active player\'s chip count', async ({ browser }) => {
     // Heads-up: Alice(SB/button)=active after posting SB(10), leaving her with 990 chips.
