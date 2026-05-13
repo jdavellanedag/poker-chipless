@@ -1,10 +1,10 @@
 ---
-status: in-progress
+status: done
 ---
 
 # Reconnection & Disconnect Handling
 
-> **Status:** `in-progress`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._
@@ -16,14 +16,14 @@ Eleventh issue, M4 — Resilience. Builds on session creation (03) and the game 
 Any player (including the host) who reloads their browser or briefly loses connection is seamlessly restored to their seat. A disconnected non-host player is auto-folded on their turn; a disconnected host freezes the game until they return.
 
 ## Acceptance Criteria
-- [ ] On initial join, server returns a UUID reconnection token in the `session:join` acknowledgement; client stores it in `sessionStorage`.
-- [ ] On page reload, client reads the token from `sessionStorage` and sends it with the `session:join` event; server recognises it and restores the player's seat instead of creating a new one.
-- [ ] Reconnected player immediately receives the full current `game:state` broadcast.
-- [ ] If a non-host player disconnects mid-hand and it becomes their turn, the server waits 10 seconds then auto-folds them and advances the turn. Log: `"Alice auto-folded (disconnected)"`.
-- [ ] If a non-host player disconnects during someone else's turn, the game continues uninterrupted; the disconnected player is marked `isConnected: false` on `GameState`.
-- [ ] If the host disconnects, `GameState.phase` transitions to `'paused'`; all player action buttons are disabled; a "Waiting for host to reconnect…" banner is shown to all players.
-- [ ] When the host reconnects, `GameState.phase` returns to its previous value (`'active'` or `'showdown'`); the banner is removed.
-- [ ] A player whose token is not found (e.g. joined on a different device) is treated as a new join attempt and rejected if the game has already started.
+- [x] On initial join, server returns a UUID reconnection token in the `session:join` acknowledgement; client stores it in `sessionStorage`.
+- [x] On page reload, client reads the token from `sessionStorage` and sends it with the `session:join` event; server recognises it and restores the player's seat instead of creating a new one.
+- [x] Reconnected player immediately receives the full current `game:state` broadcast.
+- [x] If a non-host player disconnects mid-hand and it becomes their turn, the server waits 10 seconds then auto-folds them and advances the turn. Log: `"Alice auto-folded (disconnected)"`.
+- [x] If a non-host player disconnects during someone else's turn, the game continues uninterrupted; the disconnected player is marked `isConnected: false` on `GameState`.
+- [x] If the host disconnects, `GameState.phase` transitions to `'paused'`; all player action buttons are disabled; a "Waiting for host to reconnect…" banner is shown to all players.
+- [x] When the host reconnects, `GameState.phase` returns to its previous value (`'active'` or `'showdown'`); the banner is removed.
+- [x] A player whose token is not found (e.g. joined on a different device) is treated as a new join attempt and rejected if the game has already started.
 
 ## Technical Notes
 - Reconnection token: a `crypto.randomUUID()` generated server-side on first join, stored in `Map<token, playerId>` on the server alongside the session.

@@ -183,6 +183,40 @@ export function fold(state: GameState, playerId: string): GameResult {
   return { ok: true, state: detectRoundComplete({ ...afterFold, activePlayerIndex: nextIndex }) };
 }
 
+export function autoFold(state: GameState, playerId: string): GameResult {
+  if (state.phase !== 'active') {
+    return { ok: false, error: 'Game is not active.' };
+  }
+  const activePlayer = state.players[state.activePlayerIndex];
+  if (activePlayer.id !== playerId) {
+    return { ok: false, error: 'It is not your turn.' };
+  }
+
+  const players = state.players.map((p, i) =>
+    i === state.activePlayerIndex ? { ...p, isFolded: true, hasActedThisRound: true } : p,
+  );
+  const afterFold = appendLog({ ...state, players }, `${activePlayer.displayName} auto-folded (disconnected)`);
+
+  const contesting = players.filter((p) => !p.isFolded && !p.isEliminated);
+  if (contesting.length === 1) {
+    const winner = contesting[0];
+    const winnerIndex = players.findIndex((p) => p.id === winner.id);
+    return {
+      ok: true,
+      state: withValidActions(appendLog({
+        ...afterFold,
+        phase: 'showdown',
+        round: 'showdown',
+        activePlayerIndex: winnerIndex,
+        roundComplete: true,
+      }, `${winner.displayName} wins ${state.pot} (everyone else folded)`)),
+    };
+  }
+
+  const nextIndex = nextFoldAwareIndex(players, state.activePlayerIndex);
+  return { ok: true, state: detectRoundComplete({ ...afterFold, activePlayerIndex: nextIndex }) };
+}
+
 export function check(state: GameState, playerId: string): GameResult {
   if (state.phase !== 'active') {
     return { ok: false, error: 'Game is not active.' };
