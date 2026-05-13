@@ -136,15 +136,43 @@ test.describe('Host overlay — pause and resume', () => {
 });
 
 test.describe('Host overlay — rebuy UI', () => {
-  test('host sees rebuy section with player dropdown, amount input, and enabled button', async ({ browser }) => {
+  test('rebuy button is disabled while a hand is in progress (pot > 0)', async ({ browser }) => {
+    // pot > 0 mid-hand — rebuy not allowed until the hand is resolved
     const { hostCtx, hostPage, bobCtx, bobPage } = await startAndCompletePreflop(browser);
 
     await expect(hostPage.getByTestId('rebuy-player-select')).toBeVisible();
     await expect(hostPage.getByTestId('rebuy-amount-input')).toBeVisible();
-    await expect(hostPage.getByTestId('rebuy-btn')).toBeEnabled();
+    await expect(hostPage.getByTestId('rebuy-btn')).toBeDisabled();
 
     // Non-host does not see rebuy controls
     await expect(bobPage.getByTestId('rebuy-player-select')).not.toBeVisible();
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+
+  test('rebuy button is enabled between hands (pot === 0) when amount is valid', async ({ browser }) => {
+    // Complete a full hand so pot returns to 0, then check button is enabled
+    const { ctx: hostCtx, page: hostPage, code } = await createSession(browser, 'Alice');
+    const { ctx: bobCtx } = await joinSession(browser, code, 'Bob');
+
+    // 100 chips, 50/100 blinds: both go all-in immediately
+    await hostPage.getByLabel(/starting stack/i).fill('100');
+    await hostPage.getByLabel(/small blind/i).fill('50');
+    await hostPage.getByLabel(/big blind/i).fill('100');
+    await hostPage.getByRole('button', { name: 'Start Game' }).click();
+    await hostPage.getByTestId('btn-allin').click();
+    for (let i = 0; i < 4; i++) {
+      await expect(hostPage.getByTestId('advance-round-btn')).toBeVisible();
+      await hostPage.getByTestId('advance-round-btn').click();
+    }
+    await expect(hostPage.getByTestId('winner-select')).toBeVisible();
+    await hostPage.getByTestId('winner-select').selectOption({ index: 0 });
+    await hostPage.getByTestId('declare-winner-btn').click();
+
+    // pot is now 0 — rebuy button should be enabled with a valid amount
+    await expect(hostPage.getByTestId('pot')).toHaveText('0');
+    await expect(hostPage.getByTestId('rebuy-btn')).toBeEnabled();
 
     await hostCtx.close();
     await bobCtx.close();

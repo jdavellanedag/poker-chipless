@@ -664,7 +664,7 @@ function HostPanel({
   const [rebuyPlayerId, setRebuyPlayerId] = useState(state.players[0]?.id ?? '');
   const [rebuyAmount, setRebuyAmount] = useState(String(state.startingStack));
   const parsedRebuyAmount = parseInt(rebuyAmount, 10);
-  const rebuyValid = !isNaN(parsedRebuyAmount) && parsedRebuyAmount > 0 && rebuyPlayerId !== '';
+  const rebuyValid = !isNaN(parsedRebuyAmount) && parsedRebuyAmount > 0 && rebuyPlayerId !== '' && state.pot === 0;
 
   return (
     <div className="mt-4 bg-slate-800 rounded-xl p-4 space-y-3">
