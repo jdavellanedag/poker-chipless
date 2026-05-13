@@ -460,4 +460,24 @@ describe('call', () => {
     expect(result.state.activePlayerIndex).toBe(1);      // Bob is next
     expect(result.state.log.map((e) => e.message)).toContain('Alice calls 20');
   });
+
+  it('converts to all-in when stack is less than the call amount', () => {
+    // Heads-up: Alice(SB/button)=15 chips, Bob(BB)=1000 chips, bigBlind=20.
+    // Alice.currentBet=10 (posted SB), callAmount=10, but stack only has 5 left → actualAmount=5.
+    const state = makeHand(['Alice', 'Bob'], 1000, 10, 20);
+    // Override Alice's chipCount after blind posting: she posted 10, has 990 left normally.
+    // Instead give her a total stack of 15 so after posting SB(10) she has 5 left.
+    const aliceShort = { ...state.players[0], chipCount: 5 }; // 5 left after SB posted
+    const shortState = { ...state, players: [aliceShort, state.players[1]] };
+
+    const result = call(shortState, aliceShort.id);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const alice = result.state.players[0];
+    expect(alice.chipCount).toBe(0);
+    expect(alice.isAllIn).toBe(true);
+    expect(alice.currentBet).toBe(15); // 10 (SB posted) + 5 (all she had left)
+    expect(result.state.pot).toBe(35); // 30 (blinds) + 5 (Alice's remaining stack)
+  });
 });

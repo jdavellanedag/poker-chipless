@@ -215,9 +215,10 @@ export function call(state: GameState, playerId: string): GameResult {
   const callAmount = Math.max(0, state.currentBet - activePlayer.currentBet);
   const actualAmount = Math.min(callAmount, activePlayer.chipCount);
 
+  const goesAllIn = actualAmount < callAmount;
   const players = state.players.map((p, i) =>
     i === state.activePlayerIndex
-      ? { ...p, chipCount: p.chipCount - actualAmount, currentBet: p.currentBet + actualAmount, hasActedThisRound: true }
+      ? { ...p, chipCount: p.chipCount - actualAmount, currentBet: p.currentBet + actualAmount, hasActedThisRound: true, isAllIn: goesAllIn || p.isAllIn }
       : p,
   );
   const log = [

@@ -1,10 +1,10 @@
 ---
-status: in-progress
+status: done
 ---
 
 # E2E Coverage — Fold / Check / Call + Call Auto All-In Unit Test
 
-> **Status:** `in-progress`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._
