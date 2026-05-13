@@ -282,15 +282,53 @@ describe('round complete', () => {
 });
 
 describe('last player standing', () => {
-  it('transitions to showdown when only one player remains after a fold', () => {
+  it('awards pot to last remaining player, keeps phase active, and allows newHand', () => {
     // Heads-up: Alice(0)=button/SB acts first. Alice folds → Bob wins.
     const hand = makeHand(['Alice', 'Bob']);
-    // Heads-up: activePlayerIndex = 0 (Alice, button/SB acts first preflop)
     expect(hand.activePlayerIndex).toBe(0);
+    const potBeforeFold = hand.pot; // SB + BB already in pot
+
     const result = fold(hand, hand.players[0].id);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.state.phase).toBe('showdown');
+
+    const bob = result.state.players.find((p) => p.displayName === 'Bob')!;
+    // phase stays active — host can immediately start a new hand
+    expect(result.state.phase).toBe('active');
+    // pot transferred to Bob
+    expect(result.state.pot).toBe(0);
+    expect(bob.chipCount).toBe(hand.players.find((p) => p.displayName === 'Bob')!.chipCount + potBeforeFold);
+    // log records the win
+    expect(result.state.log.map((e) => e.message)).toContain(
+      `Bob wins ${potBeforeFold} (everyone else folded)`,
+    );
+    // host can start a new hand without hitting "Game has already started"
+    const nextHand = newHand(result.state);
+    expect(nextHand.ok).toBe(true);
+  });
+
+  it('awards pot to last remaining player in a 3-player hand when two fold', () => {
+    // Alice(0)=button/UTG, Bob(1)=SB, Carol(2)=BB. Alice folds first, then Bob folds.
+    const hand = makeHand(['Alice', 'Bob', 'Carol']);
+    expect(hand.activePlayerIndex).toBe(0); // Alice (UTG) acts first
+    const potBeforeFolds = hand.pot;
+
+    const afterAliceFold = fold(hand, hand.players[0].id);
+    expect(afterAliceFold.ok).toBe(true);
+    if (!afterAliceFold.ok) return;
+    // Two still contesting (Bob + Carol) — hand continues
+    expect(afterAliceFold.state.phase).toBe('active');
+
+    const afterBobFold = fold(afterAliceFold.state, afterAliceFold.state.players[afterAliceFold.state.activePlayerIndex].id);
+    expect(afterBobFold.ok).toBe(true);
+    if (!afterBobFold.ok) return;
+
+    const carol = afterBobFold.state.players.find((p) => p.displayName === 'Carol')!;
+    expect(afterBobFold.state.phase).toBe('active');
+    expect(afterBobFold.state.pot).toBe(0);
+    expect(carol.chipCount).toBe(hand.players.find((p) => p.displayName === 'Carol')!.chipCount + potBeforeFolds);
+    const nextHand = newHand(afterBobFold.state);
+    expect(nextHand.ok).toBe(true);
   });
 });
 

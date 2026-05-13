@@ -155,7 +155,22 @@ export function fold(state: GameState, playerId: string): GameResult {
 
   const contesting = players.filter((p) => !p.isFolded && !p.isEliminated);
   if (contesting.length === 1) {
-    return { ok: true, state: { ...state, players, log, phase: 'showdown' } };
+    const winner = contesting[0];
+    const awardedPlayers = players.map((p) =>
+      p.id === winner.id ? { ...p, chipCount: p.chipCount + state.pot } : p,
+    );
+    return {
+      ok: true,
+      state: {
+        ...state,
+        players: awardedPlayers,
+        log: [
+          ...log,
+          { timestamp: new Date().toISOString(), message: `${winner.displayName} wins ${state.pot} (everyone else folded)` },
+        ],
+        pot: 0,
+      },
+    };
   }
 
   const nextIndex = nextFoldAwareIndex(players, state.activePlayerIndex);
