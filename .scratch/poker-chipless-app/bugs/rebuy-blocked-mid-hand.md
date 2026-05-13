@@ -1,7 +1,7 @@
 # Bug: Rebuy accepted during active hand, re-entering eliminated player into current rotation
 
 > **Branch:** `bugfix/rebuy-blocked-mid-hand`
-> **Status:** fixed
+> **Status:** merged
 
 ## Description
 
