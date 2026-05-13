@@ -78,11 +78,11 @@ test.describe('Waiting lobby — game start', () => {
     await hostPage.getByLabel(/big blind/i).fill('20');
     await hostPage.getByRole('button', { name: 'Start Game' }).click();
 
-    // Both clients should leave the lobby — game screen should appear with chip counts
+    // Both clients should leave the lobby — game screen should appear with pot visible
     await expect(hostPage.getByText(/waiting for host/i)).not.toBeVisible();
     await expect(playerPage.getByText(/waiting for host/i)).not.toBeVisible();
-    await expect(hostPage.getByText('1000').first()).toBeVisible();
-    await expect(playerPage.getByText('1000').first()).toBeVisible();
+    await expect(hostPage.getByTestId('pot')).toBeVisible();
+    await expect(playerPage.getByTestId('pot')).toBeVisible();
 
     await hostCtx.close();
     await playerCtx.close();
@@ -96,8 +96,8 @@ test.describe('Waiting lobby — game start', () => {
     await hostPage.getByLabel(/small blind/i).fill('10');
     await hostPage.getByLabel(/big blind/i).fill('20');
     await hostPage.getByRole('button', { name: 'Start Game' }).click();
-    // Wait for game to start
-    await expect(hostPage.getByText('1000').first()).toBeVisible();
+    // Wait for game to start — pot is visible once first hand is dealt
+    await expect(hostPage.getByTestId('pot')).toBeVisible();
 
     // Late joiner — navigate manually, don't use the helper (it waits for lobby)
     const lateCtx = await browser.newContext();

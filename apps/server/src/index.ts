@@ -106,7 +106,9 @@ io.on('connection', (socket) => {
     if (!player?.isHost) { ack({ ok: false, error: 'Only the host can start the game.' }); return; }
     const result = startGame(session.state, { startingStack, smallBlind, bigBlind });
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
-    session.state = result.state;
+    const handResult = newHand(result.state);
+    if (!handResult.ok) { ack({ ok: false, error: handResult.error }); return; }
+    session.state = handResult.state;
     io.to(code!).emit('game:state', session.state);
     ack({ ok: true });
   });

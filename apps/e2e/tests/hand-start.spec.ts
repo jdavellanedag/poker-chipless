@@ -24,6 +24,23 @@ async function joinSession(browser: Browser, code: string, playerName: string) {
 }
 
 test.describe('Hand start — New Hand button', () => {
+  test('Start Game immediately deals first hand — pot shows blinds without clicking New Hand', async ({ browser }) => {
+    const { ctx: hostCtx, page: hostPage, code } = await createSession(browser, 'Alice');
+    const { ctx: playerCtx, page: playerPage } = await joinSession(browser, code, 'Bob');
+
+    await hostPage.getByLabel(/starting stack/i).fill('1000');
+    await hostPage.getByLabel(/small blind/i).fill('10');
+    await hostPage.getByLabel(/big blind/i).fill('20');
+    await hostPage.getByRole('button', { name: 'Start Game' }).click();
+
+    // Blinds must be posted immediately — no New Hand click needed
+    await expect(hostPage.getByTestId('pot')).toHaveText('30');
+    await expect(playerPage.getByTestId('pot')).toHaveText('30');
+
+    await hostCtx.close();
+    await playerCtx.close();
+  });
+
   test('host sees New Hand button after game starts', async ({ browser }) => {
     const { ctx: hostCtx, page: hostPage, code } = await createSession(browser, 'Alice');
     const { ctx: playerCtx } = await joinSession(browser, code, 'Bob');
@@ -55,31 +72,33 @@ test.describe('Hand start — New Hand button', () => {
     await playerCtx.close();
   });
 
-  test('clicking New Hand posts blinds and both clients see updated chip counts', async ({ browser }) => {
+  test('Start Game auto-posts blinds; clicking New Hand advances to the second hand', async ({ browser }) => {
     const { ctx: hostCtx, page: hostPage, code } = await createSession(browser, 'Alice');
     const { ctx: playerCtx, page: playerPage } = await joinSession(browser, code, 'Bob');
 
     // Alice = host = player[0], Bob = player[1]
-    // Heads-up: Alice = button/SB (posts 10), Bob = BB (posts 20)
+    // First hand (auto-dealt on Start Game): heads-up → Alice = button/SB (posts 10), Bob = BB (posts 20)
     await hostPage.getByLabel(/starting stack/i).fill('1000');
     await hostPage.getByLabel(/small blind/i).fill('10');
     await hostPage.getByLabel(/big blind/i).fill('20');
     await hostPage.getByRole('button', { name: 'Start Game' }).click();
-    await expect(hostPage.getByTestId('new-hand-btn')).toBeVisible();
 
+    // First hand blinds posted automatically — no New Hand click needed
+    await expect(hostPage.getByTestId('pot')).toHaveText('30');
+    await expect(hostPage.getByTestId('chips-Alice')).toHaveText('990'); // Alice posted SB
+    await expect(hostPage.getByTestId('chips-Bob')).toHaveText('980');   // Bob posted BB
+
+    // Host clicks New Hand → second hand: button advances to Bob (SB), Alice becomes BB
     await hostPage.getByTestId('new-hand-btn').click();
 
-    // Pot should be 30 (SB 10 + BB 20)
     await expect(hostPage.getByTestId('pot')).toHaveText('30');
     await expect(playerPage.getByTestId('pot')).toHaveText('30');
 
-    // Alice posted SB: 1000 - 10 = 990
-    await expect(hostPage.getByTestId('chips-Alice')).toHaveText('990');
-    await expect(playerPage.getByTestId('chips-Alice')).toHaveText('990');
-
-    // Bob posted BB: 1000 - 20 = 980
-    await expect(hostPage.getByTestId('chips-Bob')).toHaveText('980');
-    await expect(playerPage.getByTestId('chips-Bob')).toHaveText('980');
+    // Second hand: Bob posted SB (10) from 980 → 970; Alice posted BB (20) from 990 → 970
+    await expect(hostPage.getByTestId('chips-Alice')).toHaveText('970');
+    await expect(playerPage.getByTestId('chips-Alice')).toHaveText('970');
+    await expect(hostPage.getByTestId('chips-Bob')).toHaveText('970');
+    await expect(playerPage.getByTestId('chips-Bob')).toHaveText('970');
 
     await hostCtx.close();
     await playerCtx.close();
