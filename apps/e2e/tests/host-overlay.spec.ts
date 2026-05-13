@@ -1,4 +1,4 @@
-import { test, expect, Browser, Page } from '@playwright/test';
+import { test, expect, Browser } from '@playwright/test';
 
 async function createSession(browser: Browser, hostName: string) {
   const ctx = await browser.newContext();
@@ -42,18 +42,6 @@ async function startAndCompletePreflop(browser: Browser) {
   return { hostCtx, hostPage, bobCtx, bobPage };
 }
 
-async function checkAndAdvance(actingPage: Page, hostPage: Page, nextRound: string) {
-  await actingPage.getByTestId('btn-check').click();
-  const otherPage = actingPage === hostPage ? actingPage : hostPage;
-  // Wait for the next player to see action buttons or advance button
-  await expect(hostPage.getByTestId('round-label')).not.toHaveText(nextRound);
-  // Both players check each round
-  if (actingPage !== hostPage) {
-    await expect(hostPage.getByTestId('action-buttons')).toBeVisible();
-    await hostPage.getByTestId('btn-check').click();
-  }
-  await expect(hostPage.getByTestId('advance-round-btn')).toBeVisible();
-}
 
 test.describe('Host overlay — dynamic Advance Round labels', () => {
   test('after preflop completes, advance button shows "Deal Flop"', async ({ browser }) => {
