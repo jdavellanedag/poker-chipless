@@ -1,7 +1,7 @@
 # Bug: Action buttons visible on player screen after winner is declared at showdown
 
 > **Branch:** `main` (fixed inline per user request)
-> **Status:** open
+> **Status:** merged
 
 ## Description
 
