@@ -1,7 +1,7 @@
 # Bug: Host panel not fixed as sidebar on desktop
 
 > **Branch:** `bugfix/host-panel-not-fixed-sidebar`
-> **Status:** fixed
+> **Status:** merged
 
 ## Description
 
