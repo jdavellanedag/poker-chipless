@@ -391,6 +391,104 @@ export function bet(state: GameState, playerId: string, amount: number): GameRes
   };
 }
 
+const ROUND_ORDER = ['preflop', 'flop', 'turn', 'river', 'showdown'] as const;
+type Round = typeof ROUND_ORDER[number];
+
+const ROUND_LABELS: Record<Round, string> = {
+  preflop: '--- Pre-flop ---',
+  flop: '--- Flop ---',
+  turn: '--- Turn ---',
+  river: '--- River ---',
+  showdown: '--- Showdown ---',
+};
+
+export function advanceRound(state: GameState): GameResult {
+  if (state.phase !== 'active') {
+    return { ok: false, error: 'Game is not active.' };
+  }
+  const currentIndex = ROUND_ORDER.indexOf(state.round as Round);
+  if (currentIndex === -1 || currentIndex === ROUND_ORDER.length - 1) {
+    return { ok: false, error: 'Cannot advance past showdown.' };
+  }
+  const nextRound = ROUND_ORDER[currentIndex + 1];
+  const players = state.players.map((p) => ({
+    ...p,
+    currentBet: 0,
+    hasActedThisRound: false,
+  }));
+
+  // First non-folded non-eliminated player clockwise of the button
+  const n = players.length;
+  let firstActive = state.dealerButtonIndex;
+  for (let i = 1; i <= n; i++) {
+    const idx = (state.dealerButtonIndex + i) % n;
+    if (!players[idx].isEliminated && !players[idx].isFolded) {
+      firstActive = idx;
+      break;
+    }
+  }
+
+  const log = [
+    ...state.log,
+    { timestamp: new Date().toISOString(), message: ROUND_LABELS[nextRound] },
+  ];
+
+  return {
+    ok: true,
+    state: detectRoundComplete({
+      ...state,
+      round: nextRound,
+      currentBet: 0,
+      lastRaiseSize: state.bigBlind,
+      roundComplete: false,
+      activePlayerIndex: firstActive,
+      players,
+      log,
+    }),
+  };
+}
+
+export function declareWinner(state: GameState, playerId: string): GameResult {
+  if (state.phase !== 'active') {
+    return { ok: false, error: 'Game is not active.' };
+  }
+  const winner = state.players.find((p) => p.id === playerId);
+  if (!winner) {
+    return { ok: false, error: 'Player not found.' };
+  }
+  if (winner.isEliminated) {
+    return { ok: false, error: 'Cannot declare an eliminated player as winner.' };
+  }
+
+  const potAmount = state.pot;
+  const players = state.players.map((p) => {
+    const newChips = p.id === playerId ? p.chipCount + potAmount : p.chipCount;
+    return {
+      ...p,
+      chipCount: newChips,
+      isEliminated: p.isEliminated || newChips === 0,
+    };
+  });
+
+  const log = [
+    ...state.log,
+    {
+      timestamp: new Date().toISOString(),
+      message: `${winner.displayName} wins pot of ${potAmount}`,
+    },
+  ];
+
+  return {
+    ok: true,
+    state: withValidActions({
+      ...state,
+      pot: 0,
+      players,
+      log,
+    }),
+  };
+}
+
 export function reorderPlayers(state: GameState, orderedPlayerIds: string[]): GameResult {
   const existingIds = new Set(state.players.map((p) => p.id));
   if (
