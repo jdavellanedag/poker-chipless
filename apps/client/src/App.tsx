@@ -491,7 +491,7 @@ function GameScreen({
           {hostDisconnected ? 'Waiting for host to reconnect…' : 'Game paused by host'}
         </div>
       )}
-      <div className={`p-4 transition-opacity ${!isHost && isPaused ? 'opacity-50' : ''}`}>
+      <div className={`p-4 transition-opacity ${!isHost && isPaused ? 'opacity-50' : ''} ${isHost ? 'md:mr-72' : ''}`}>
         <div className="max-w-sm mx-auto pt-8">
           <div className="text-center mb-6">
             <p className="text-slate-400 text-xs uppercase tracking-wide mb-1">Pot</p>
@@ -626,35 +626,49 @@ function GameScreen({
             </div>
           )}
 
-          {isHost && (
+          {/* Mobile toggle — only shown when panel is closed */}
+          {isHost && !hostPanelOpen && (
             <button
               data-testid="host-panel-toggle"
-              onClick={() => setHostPanelOpen(!hostPanelOpen)}
+              onClick={() => setHostPanelOpen(true)}
               className="md:hidden w-full bg-slate-700 text-slate-300 py-3 rounded-lg text-sm my-2"
             >
-              {hostPanelOpen ? '▼ Hide Controls' : '▲ Host Controls'}
+              ▲ Host Controls
             </button>
-          )}
-          {isHost && (
-            <div
-              data-testid="host-panel"
-              className={hostPanelOpen ? 'block' : 'hidden md:block'}
-            >
-              <HostPanel
-                state={state}
-                onNewHand={onNewHand}
-                onAdvanceRound={onAdvanceRound}
-                onDeclareWinner={onDeclareWinner}
-                onPause={onPause}
-                onResume={onResume}
-                onRebuy={onRebuy}
-              />
-            </div>
           )}
 
           <ActionLog entries={state.log} />
         </div>
       </div>
+
+      {/* Single panel instance — mobile: full-screen overlay; desktop: fixed right sidebar */}
+      {isHost && (
+        <aside
+          data-testid="host-panel-sidebar"
+          className={`fixed right-0 top-0 w-full md:w-72 h-screen bg-slate-800 border-l border-slate-700 overflow-y-auto flex-col p-4 z-50 ${hostPanelOpen ? 'flex' : 'hidden'} md:flex`}
+        >
+          <div className="flex items-center justify-between md:hidden mb-2">
+            <span className="text-slate-300 text-sm font-semibold">Host Controls</span>
+            <button
+              data-testid="host-panel-close"
+              onClick={() => setHostPanelOpen(false)}
+              className="text-slate-400 hover:text-white w-8 h-8 flex items-center justify-center rounded"
+              aria-label="Close host controls"
+            >
+              ✕
+            </button>
+          </div>
+          <HostPanel
+            state={state}
+            onNewHand={onNewHand}
+            onAdvanceRound={onAdvanceRound}
+            onDeclareWinner={onDeclareWinner}
+            onPause={onPause}
+            onResume={onResume}
+            onRebuy={onRebuy}
+          />
+        </aside>
+      )}
     </div>
   );
 }
