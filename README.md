@@ -105,3 +105,5 @@ npm test --workspace=@poker-chipless/server
 > **Session codes:** Two simultaneous game creations could theoretically generate the same code; restart the server to generate a new one.
 
 > **LAN only:** The server is not exposed to the internet. All players must be on the same Wi-Fi or local network as the host machine.
+
+> **Capacitor compatibility (v2 audit):** The client uses no `window.location` reloads, no non-standard `navigator` APIs, and no Web Bluetooth/NFC/Serial. The Socket.IO connection uses a relative URL (`io()` with no explicit host), which is compatible with Capacitor's webview origin. No Capacitor plugins are required for the current feature set.
