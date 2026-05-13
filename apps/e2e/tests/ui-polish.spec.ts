@@ -36,21 +36,21 @@ async function startGame(hostPage: Page) {
 // --- Tracer bullet: host panel is a collapsible bottom sheet on mobile ---
 
 test.describe('UI Polish — host panel collapsible on mobile', () => {
-  test('host panel is hidden by default on mobile and shown when toggled', async ({ browser }) => {
+  test('host panel is hidden by default on mobile, opened by toggle, closed by X button', async ({ browser }) => {
     const { ctx: hostCtx, page: hostPage, code } = await createSession(browser, 'Alice');
     const { ctx: bobCtx } = await joinSession(browser, code, 'Bob');
     await startGame(hostPage);
 
-    // Panel content is hidden by default on mobile
-    await expect(hostPage.getByTestId('host-panel')).not.toBeVisible();
+    // Panel is hidden by default on mobile
+    await expect(hostPage.getByTestId('host-panel-sidebar')).not.toBeVisible();
 
     // Toggle opens the panel
     await hostPage.getByTestId('host-panel-toggle').click();
-    await expect(hostPage.getByTestId('host-panel')).toBeVisible();
+    await expect(hostPage.getByTestId('host-panel-sidebar')).toBeVisible();
 
-    // Toggle closes the panel
-    await hostPage.getByTestId('host-panel-toggle').click();
-    await expect(hostPage.getByTestId('host-panel')).not.toBeVisible();
+    // Close button hides the panel
+    await hostPage.getByTestId('host-panel-close').click();
+    await expect(hostPage.getByTestId('host-panel-sidebar')).not.toBeVisible();
 
     await hostCtx.close();
     await bobCtx.close();
@@ -136,7 +136,45 @@ test.describe('UI Polish — action button touch targets', () => {
   });
 });
 
-// --- Slice 4: disconnected player shows visual indicator in game view ---
+// --- Slice 4 (bugfix): host panel is a fixed right sidebar on desktop ---
+
+const DESKTOP = { width: 1024, height: 768 };
+
+test.describe('UI Polish — host panel fixed sidebar on desktop', () => {
+  test('host panel is anchored to the right edge of the viewport on desktop', async ({ browser }) => {
+    const { ctx: hostCtx, page: hostPage, code } = await createSession(browser, 'Alice', DESKTOP);
+    const { ctx: bobCtx } = await joinSession(browser, code, 'Bob', DESKTOP);
+    await startGame(hostPage);
+
+    const sidebar = hostPage.getByTestId('host-panel-sidebar');
+    await expect(sidebar).toBeVisible();
+
+    const box = await sidebar.boundingBox();
+    expect(box).not.toBeNull();
+    // Right edge is flush with the viewport
+    expect(box!.x + box!.width).toBeCloseTo(DESKTOP.width, 0);
+    // Starts at the top of the viewport
+    expect(box!.y).toBe(0);
+    // Full viewport height
+    expect(box!.height).toBe(DESKTOP.height);
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+
+  test('host panel sidebar is not visible on mobile viewport', async ({ browser }) => {
+    const { ctx: hostCtx, page: hostPage, code } = await createSession(browser, 'Alice');
+    const { ctx: bobCtx } = await joinSession(browser, code, 'Bob');
+    await startGame(hostPage);
+
+    await expect(hostPage.getByTestId('host-panel-sidebar')).not.toBeVisible();
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+});
+
+// --- Slice 6: disconnected player shows visual indicator in game view ---
 
 test.describe('UI Polish — disconnected player indicator', () => {
   test('disconnected player shows visual indicator in game view', async ({ browser }) => {
