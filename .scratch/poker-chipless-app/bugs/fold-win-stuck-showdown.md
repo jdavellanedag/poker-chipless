@@ -1,7 +1,7 @@
 # Bug: Host stuck on lobby screen after all-but-one players fold
 
 > **Branch:** `bugfix/fold-win-stuck-showdown`
-> **Status:** fixed
+> **Status:** merged
 
 ## Description
 
