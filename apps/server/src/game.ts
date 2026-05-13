@@ -156,6 +156,7 @@ export function fold(state: GameState, playerId: string): GameResult {
   const contesting = players.filter((p) => !p.isFolded && !p.isEliminated);
   if (contesting.length === 1) {
     const winner = contesting[0];
+    const winnerIndex = players.findIndex((p) => p.id === winner.id);
     const awardedPlayers = players.map((p) =>
       p.id === winner.id ? { ...p, chipCount: p.chipCount + state.pot } : p,
     );
@@ -164,6 +165,8 @@ export function fold(state: GameState, playerId: string): GameResult {
       state: {
         ...state,
         players: awardedPlayers,
+        activePlayerIndex: winnerIndex,
+        roundComplete: true,
         log: [
           ...log,
           { timestamp: new Date().toISOString(), message: `${winner.displayName} wins ${state.pot} (everyone else folded)` },

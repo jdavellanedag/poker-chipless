@@ -281,6 +281,53 @@ describe('round complete', () => {
   });
 });
 
+describe('fold-win roundComplete', () => {
+  it('sets roundComplete when SB folds last in a 3-player hand', () => {
+    // Alice(0)=button/UTG, Bob(1)=SB, Carol(2)=BB
+    // Alice folds → Bob folds → Carol wins; Bob's screen must not show action buttons
+    const hand = makeHand(['Alice', 'Bob', 'Carol']);
+
+    const afterAlice = fold(hand, hand.players[0].id);
+    expect(afterAlice.ok).toBe(true);
+    if (!afterAlice.ok) return;
+
+    const bobIndex = afterAlice.state.activePlayerIndex;
+    const afterBob = fold(afterAlice.state, afterAlice.state.players[bobIndex].id);
+    expect(afterBob.ok).toBe(true);
+    if (!afterBob.ok) return;
+
+    expect(afterBob.state.roundComplete).toBe(true);
+    expect(afterBob.state.activePlayerIndex).not.toBe(bobIndex);
+  });
+
+  it('sets roundComplete when BB folds last after a caller folds others out', () => {
+    // Alice(0)=button, Bob(1)=SB, Carol(2)=BB, Dave(3)=UTG
+    // Dave calls, Alice folds, Bob folds, Carol folds → Dave wins; Carol's screen must not show action buttons
+    const hand = makeHand(['Alice', 'Bob', 'Carol', 'Dave']);
+    expect(hand.activePlayerIndex).toBe(3);
+
+    const afterDave = call(hand, hand.players[3].id);
+    expect(afterDave.ok).toBe(true);
+    if (!afterDave.ok) return;
+
+    const afterAlice = fold(afterDave.state, afterDave.state.players[afterDave.state.activePlayerIndex].id);
+    expect(afterAlice.ok).toBe(true);
+    if (!afterAlice.ok) return;
+
+    const afterBob = fold(afterAlice.state, afterAlice.state.players[afterAlice.state.activePlayerIndex].id);
+    expect(afterBob.ok).toBe(true);
+    if (!afterBob.ok) return;
+
+    const carolIndex = afterBob.state.activePlayerIndex;
+    const afterCarol = fold(afterBob.state, afterBob.state.players[carolIndex].id);
+    expect(afterCarol.ok).toBe(true);
+    if (!afterCarol.ok) return;
+
+    expect(afterCarol.state.roundComplete).toBe(true);
+    expect(afterCarol.state.activePlayerIndex).not.toBe(carolIndex);
+  });
+});
+
 describe('last player standing', () => {
   it('awards pot to last remaining player, keeps phase active, and allows newHand', () => {
     // Heads-up: Alice(0)=button/SB acts first. Alice folds → Bob wins.
