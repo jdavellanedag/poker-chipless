@@ -1,4 +1,4 @@
-import { test, expect, Browser, BrowserContext, Page } from '@playwright/test';
+import { test, expect, Browser, Page } from '@playwright/test';
 
 async function createSession(browser: Browser, hostName: string) {
   const ctx = await browser.newContext();
