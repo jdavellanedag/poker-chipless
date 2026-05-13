@@ -487,6 +487,9 @@ export function resume(state: GameState): GameResult {
 }
 
 export function rebuy(state: GameState, playerId: string, amount: number): GameResult {
+  if (state.pot > 0) {
+    return { ok: false, error: 'Rebuy is only allowed between hands.' };
+  }
   if (amount <= 0) {
     return { ok: false, error: 'Rebuy amount must be a positive integer.' };
   }

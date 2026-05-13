@@ -1167,6 +1167,20 @@ describe('rebuy', () => {
     const result = rebuy(state, 'no-such-id', 100);
     expect(result.ok).toBe(false);
   });
+
+  it('rejects rebuy when a hand is in progress (pot > 0)', () => {
+    const state = makeHand(['Alice', 'Bob']); // blinds posted → pot > 0
+    const alice = state.players[0];
+    const result = rebuy(state, alice.id, 500);
+    expect(result.ok).toBe(false);
+  });
+
+  it('allows rebuy between hands when pot is 0', () => {
+    const state = makeActive(['Alice', 'Bob']); // no hand started → pot === 0
+    const alice = state.players[0];
+    const result = rebuy(state, alice.id, 500);
+    expect(result.ok).toBe(true);
+  });
 });
 
 describe('autoFold', () => {
