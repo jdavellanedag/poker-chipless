@@ -1,10 +1,10 @@
 ---
-status: pending
+status: in-progress
 ---
 
 # Player Actions — Bet / Raise / All-In
 
-> **Status:** `pending`
+> **Status:** `in-progress`
 
 ## Clarification
 _No open questions._
