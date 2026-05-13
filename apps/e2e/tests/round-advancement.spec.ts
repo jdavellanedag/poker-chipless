@@ -53,6 +53,25 @@ test.describe('Advance Round', () => {
     await bobCtx.close();
   });
 
+  test('Advance Round button is not visible to host mid-round before betting is complete', async ({ browser }) => {
+    // Game starts, first hand dealt — no player has acted yet, roundComplete=false
+    const { ctx: hostCtx, page: hostPage, code } = await createSession(browser, 'Alice');
+    const { ctx: bobCtx } = await joinSession(browser, code, 'Bob');
+
+    await hostPage.getByLabel(/starting stack/i).fill('1000');
+    await hostPage.getByLabel(/small blind/i).fill('10');
+    await hostPage.getByLabel(/big blind/i).fill('20');
+    await hostPage.getByRole('button', { name: 'Start Game' }).click();
+    await expect(hostPage.getByTestId('pot')).toHaveText('30');
+
+    // Alice (SB/host) is active but hasn't acted — round is not complete
+    await expect(hostPage.getByTestId('action-buttons')).toBeVisible();
+    await expect(hostPage.getByTestId('advance-round-btn')).not.toBeVisible();
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+
   test('host clicks Advance Round and round label changes to flop', async ({ browser }) => {
     const { hostCtx, hostPage, bobCtx, bobPage } = await startAndCompleteRound(browser);
 
@@ -116,6 +135,105 @@ test.describe('Declare Winner at showdown', () => {
     // New Hand button appears for host only
     await expect(hostPage.getByTestId('new-hand-btn')).toBeVisible();
     await expect(bobPage.getByTestId('new-hand-btn')).not.toBeVisible();
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+
+  test("winner's chip count increases on both pages after declare winner", async ({ browser }) => {
+    // Pot = 40 after preflop (Alice calls 10, both at 20). Alice has 980 chips going to showdown.
+    // After Alice wins pot of 40: Alice = 980 + 40 = 1020.
+    const { hostCtx, hostPage, bobCtx, bobPage } = await startAndCompleteRound(browser);
+
+    const aliceChipsBefore = Number(await hostPage.getByTestId('chips-Alice').textContent());
+
+    await advanceToShowdown(hostPage, bobPage);
+    await hostPage.getByTestId('winner-select').selectOption({ index: 0 }); // Alice
+    await hostPage.getByTestId('declare-winner-btn').click();
+
+    await expect(hostPage.getByTestId('chips-Alice')).toHaveText(String(aliceChipsBefore + 40));
+    await expect(bobPage.getByTestId('chips-Alice')).toHaveText(String(aliceChipsBefore + 40));
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+
+  test('folded player is not in winner dropdown at showdown', async ({ browser }) => {
+    // 3-player: Alice(0)=button/UTG, Bob(1)=SB, Carol(2)=BB.
+    // Preflop: Alice calls, Bob calls, Carol checks → roundComplete.
+    // Flop: Bob checks, Carol folds, Alice checks → Carol excluded from winner dropdown.
+    const { ctx: hostCtx, page: hostPage, code } = await createSession(browser, 'Alice');
+    const { ctx: bobCtx, page: bobPage } = await joinSession(browser, code, 'Bob');
+    const { ctx: carolCtx, page: carolPage } = await joinSession(browser, code, 'Carol');
+
+    await hostPage.getByLabel(/starting stack/i).fill('1000');
+    await hostPage.getByLabel(/small blind/i).fill('10');
+    await hostPage.getByLabel(/big blind/i).fill('20');
+    await hostPage.getByRole('button', { name: 'Start Game' }).click();
+    await expect(hostPage.getByTestId('pot')).toBeVisible();
+
+    // Preflop: Alice(UTG) calls, Bob(SB) calls, Carol(BB) checks
+    await hostPage.getByTestId('btn-call').click();
+    await expect(bobPage.getByTestId('action-buttons')).toBeVisible();
+    await bobPage.getByTestId('btn-call').click();
+    await expect(carolPage.getByTestId('action-buttons')).toBeVisible();
+    await carolPage.getByTestId('btn-check').click();
+    await expect(hostPage.getByTestId('advance-round-btn')).toBeVisible();
+
+    // Advance to flop: Bob acts first, Carol folds, Alice checks → roundComplete
+    await hostPage.getByTestId('advance-round-btn').click();
+    await expect(hostPage.getByText('flop')).toBeVisible();
+    await expect(bobPage.getByTestId('action-buttons')).toBeVisible();
+    await bobPage.getByTestId('btn-check').click();
+    await expect(carolPage.getByTestId('action-buttons')).toBeVisible();
+    await carolPage.getByTestId('btn-fold').click();
+    await expect(hostPage.getByTestId('action-buttons')).toBeVisible();
+    await hostPage.getByTestId('btn-check').click();
+    await expect(hostPage.getByTestId('advance-round-btn')).toBeVisible();
+
+    // Advance through turn and river (only Bob and Alice remain)
+    for (const round of ['turn', 'river'] as const) {
+      await hostPage.getByTestId('advance-round-btn').click();
+      await expect(hostPage.getByText(round)).toBeVisible();
+      await expect(bobPage.getByTestId('action-buttons')).toBeVisible();
+      await bobPage.getByTestId('btn-check').click();
+      await expect(hostPage.getByTestId('action-buttons')).toBeVisible();
+      await hostPage.getByTestId('btn-check').click();
+      await expect(hostPage.getByTestId('advance-round-btn')).toBeVisible();
+    }
+    await hostPage.getByTestId('advance-round-btn').click();
+    await expect(hostPage.getByText('showdown')).toBeVisible();
+    await expect(hostPage.getByTestId('declare-winner-panel')).toBeVisible();
+
+    // Winner select must not contain Carol (she folded)
+    const options = await hostPage.getByTestId('winner-select').locator('option').allTextContents();
+    expect(options.some((o) => o.includes('Carol'))).toBe(false);
+    expect(options.some((o) => o.includes('Alice'))).toBe(true);
+    expect(options.some((o) => o.includes('Bob'))).toBe(true);
+
+    await hostCtx.close();
+    await bobCtx.close();
+    await carolCtx.close();
+  });
+
+  test('clicking New Hand after a showdown deals the next hand with blinds posted', async ({ browser }) => {
+    const { hostCtx, hostPage, bobCtx, bobPage } = await startAndCompleteRound(browser);
+
+    // After preflop: Alice=980 chips, Bob=980 chips, pot=40
+    await advanceToShowdown(hostPage, bobPage);
+    await hostPage.getByTestId('winner-select').selectOption({ index: 0 }); // Alice wins
+    await hostPage.getByTestId('declare-winner-btn').click();
+    await expect(hostPage.getByTestId('new-hand-btn')).toBeVisible();
+
+    // Alice won 40 chips → Alice has 980+40=1020, Bob has 980
+    // Hand 2: button advances to Bob (SB), Alice (BB)
+    // Bob posts SB(10) from 980 → 970; Alice posts BB(20) from 1020 → 1000; pot=30
+    await hostPage.getByTestId('new-hand-btn').click();
+
+    await expect(hostPage.getByTestId('pot')).toHaveText('30');
+    await expect(bobPage.getByTestId('pot')).toHaveText('30');
+    await expect(hostPage.getByTestId('chips-Alice')).toHaveText('1000');
+    await expect(hostPage.getByTestId('chips-Bob')).toHaveText('970');
 
     await hostCtx.close();
     await bobCtx.close();
