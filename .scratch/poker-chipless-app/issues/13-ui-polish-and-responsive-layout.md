@@ -29,7 +29,7 @@ A focused Tailwind styling pass across all screens, ensuring the layout works on
 
 ## Technical Notes
 - Use Tailwind responsive prefixes (`sm:`, `md:`) for layout breakpoints — no custom CSS media queries.
-- Zustand can manage the host overlay collapsed/expanded state on mobile.
+- Use React `useState` for host overlay collapsed/expanded state on mobile — consistent with the rest of the codebase (no Zustand or external state library).
 - Test on Chrome DevTools device simulation at minimum: iPhone SE (375×667), iPhone 14 (390×844), iPad (768×1024).
 - Capacitor wrapping is not done in this issue — only the audit. Flag any API that would need a Capacitor plugin in a comment or a short note in the README.
 - Dark theme using Tailwind's slate/zinc palette is recommended for a poker-appropriate aesthetic, but the specific color choices are at the implementer's discretion.
