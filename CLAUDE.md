@@ -129,6 +129,9 @@ npm run build             # build all packages and apps
 npm run start             # serve production build on port 3000
 npm run test:e2e          # build then run Playwright E2E suite (headless)
 npm run test:e2e:headed   # same but shows the browser window
+# from apps/server:
+npm run test              # run Vitest unit tests once
+npm run test:watch        # run Vitest in watch mode
 ```
 
 ---
@@ -210,6 +213,7 @@ GameState {
   lastRaiseSize: number         // integer — for minimum re-raise enforcement
   smallBlind: number            // integer
   bigBlind: number              // integer
+  roundComplete: boolean        // true when all active players have acted and bets are equal
   log: LogEntry[]
 }
 
@@ -222,6 +226,8 @@ Player {
   isEliminated: boolean
   isConnected: boolean
   isAllIn: boolean
+  isFolded: boolean
+  hasActedThisRound: boolean
   validActions: ValidAction[]   // computed server-side, sent with every game:state
 }
 
