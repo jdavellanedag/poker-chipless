@@ -36,6 +36,7 @@ export function startGame(
       phase: 'active',
       smallBlind,
       bigBlind,
+      startingStack,
       dealerButtonIndex: -1, // sentinel: no hand dealt yet
       players: state.players.map((p) => ({ ...p, chipCount: startingStack })),
     }, `Game started. Stack: ${startingStack}, Blinds: ${smallBlind}/${bigBlind}`),

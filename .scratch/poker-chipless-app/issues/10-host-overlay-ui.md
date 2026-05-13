@@ -1,10 +1,10 @@
 ---
-status: pending
+status: done
 ---
 
 # Host Overlay UI
 
-> **Status:** `pending`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._
@@ -17,8 +17,8 @@ The host sees the same game screen as any player, plus a persistent overlay pane
 
 ## Acceptance Criteria
 - [ ] The host overlay panel is only rendered when `player.isHost === true`; non-host players never see it.
-- [ ] The overlay consolidates all host controls: "New Hand" button, "Advance Round" button (with next-round label), "Declare Winner" panel (moved from inline `GameScreen`), re-buy section (player selector + chip amount input + confirm), "Pause" / "Resume" toggle, and the action log panel.
-- [ ] "Advance Round" button label reflects the next round: e.g. "Deal Flop", "Deal Turn", "Deal River", "Go to Showdown".
+- [ ] The overlay consolidates all host controls: "New Hand" button, a single "Advance Round" button (with dynamic next-round label), "Declare Winner" panel (moved from inline `GameScreen`), re-buy section (player selector + chip amount input + confirm), and "Pause" / "Resume" toggle.
+- [ ] The single "Advance Round" button label reflects the next round dynamically: "Deal Flop" (after preflop), "Deal Turn" (after flop), "Deal River" (after turn), "Go to Showdown" (after river). Only one button is shown at a time — it advances to whichever phase is next.
 - [ ] "Advance Round" is hidden when `phase === 'showdown'`.
 - [ ] "Declare Winner" panel is only shown when `phase === 'showdown'`; existing dual-mode logic (simplified accept vs. dropdown) from issue 08-1 is preserved.
 - [ ] Re-buy chip amount input accepts only positive integers; defaults to the session's starting stack amount.
@@ -28,7 +28,8 @@ The host sees the same game screen as any player, plus a persistent overlay pane
 - [ ] The overlay does not cover the player's own chip count or action buttons — it is positioned so the host can still act as a player.
 
 ## Technical Notes
-- Use React `useState` for overlay UI state (which section is expanded, re-buy form values). No external state library — consistent with the rest of the codebase.
+- The action log panel remains on the main `GameScreen` for all players (host and non-host). It is NOT moved into the host overlay.
+- Use React `useState` for overlay UI state (open/closed, re-buy form values). No external state library — consistent with the rest of the codebase.
 - Host control events (`host:advance-round`, `host:declare-winner`, `host:rebuy`, `host:pause`, `host:resume`, `host:new-hand`) are fired via Socket.IO and acknowledged; show a brief loading state on the button between click and acknowledgement.
 - `game:state.phase` drives overlay control visibility: `'active'` or `'showdown'` shows pause; `'paused'` shows resume; `'showdown'` shows the Declare Winner panel.
 - The overlay can be a fixed sidebar on desktop or a collapsible bottom sheet on mobile (layout polish is issue 13).

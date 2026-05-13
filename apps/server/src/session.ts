@@ -44,6 +44,7 @@ export function createSession(displayName: string): { state: GameState; token: s
     lastRaiseSize: 0,
     smallBlind: 0,
     bigBlind: 0,
+    startingStack: 0,
     roundComplete: false,
     log: [],
   };

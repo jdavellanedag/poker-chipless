@@ -113,6 +113,14 @@ export default function App() {
     socket.emit('action:allin', {}, () => {});
   }
 
+  function handlePause() {
+    socket.emit('host:pause', {}, () => {});
+  }
+
+  function handleResume() {
+    socket.emit('host:resume', {}, () => {});
+  }
+
   if (gameState) {
     if (gameState.phase === 'ended') {
       return (
@@ -128,7 +136,7 @@ export default function App() {
         </CenteredCard>
       );
     }
-    if (gameState.phase === 'active' || gameState.phase === 'showdown') {
+    if (gameState.phase === 'active' || gameState.phase === 'showdown' || gameState.phase === 'paused') {
       return (
         <GameScreen
           state={gameState}
@@ -142,6 +150,8 @@ export default function App() {
           onBet={handleBet}
           onRaise={handleRaise}
           onAllin={handleAllin}
+          onPause={handlePause}
+          onResume={handleResume}
         />
       );
     }
@@ -402,6 +412,8 @@ function GameScreen({
   onBet,
   onRaise,
   onAllin,
+  onPause,
+  onResume,
 }: {
   state: GameState;
   myPlayerId: string;
@@ -414,6 +426,8 @@ function GameScreen({
   onBet: (amount: number) => void;
   onRaise: (amount: number) => void;
   onAllin: () => void;
+  onPause: () => void;
+  onResume: () => void;
 }) {
   const me = state.players.find((p) => p.id === myPlayerId);
   const isHost = me?.isHost ?? false;
@@ -454,158 +468,264 @@ function GameScreen({
     : -1;
   const bbIdx = hasHand ? nonElim(sbIdx) : -1;
 
+  const isPaused = state.phase === 'paused';
+
   return (
-    <div className="min-h-screen bg-slate-900 p-4">
-      <div className="max-w-sm mx-auto pt-8">
-        <div className="text-center mb-6">
-          <p className="text-slate-400 text-xs uppercase tracking-wide mb-1">Pot</p>
-          <p data-testid="pot" className="text-3xl font-bold text-white">{state.pot}</p>
-          <p data-testid="round-label" className="text-slate-500 text-xs mt-1 uppercase tracking-wide">{state.round}</p>
+    <div className="min-h-screen bg-slate-900">
+      {!isHost && isPaused && (
+        <div data-testid="pause-banner" className="bg-yellow-600 text-white text-center py-2 px-4 font-semibold text-sm">
+          Game paused by host
         </div>
-
-        <ul className="space-y-2 mb-6">
-          {state.players.map((p, i) => {
-            const isButton = i === state.dealerButtonIndex;
-            const isActive = i === state.activePlayerIndex;
-            const isSB = i === sbIdx;
-            const isBB = i === bbIdx;
-            return (
-              <li
-                key={p.id}
-                data-testid={`player-row-${p.displayName}`}
-                className={`flex justify-between items-center rounded-lg px-4 py-3 ${isActive ? 'bg-slate-700 ring-1 ring-emerald-500' : 'bg-slate-800'}`}
-              >
-                <span className="flex items-center gap-2">
-                  {isButton && (
-                    <span className="text-xs bg-yellow-600 text-yellow-100 px-1.5 py-0.5 rounded-full font-mono">D</span>
-                  )}
-                  {isSB && (
-                    <span data-testid={`badge-sb-${p.displayName}`} className="text-xs bg-blue-700 text-blue-100 px-1.5 py-0.5 rounded-full font-mono">SB</span>
-                  )}
-                  {isBB && (
-                    <span data-testid={`badge-bb-${p.displayName}`} className="text-xs bg-violet-700 text-violet-100 px-1.5 py-0.5 rounded-full font-mono">BB</span>
-                  )}
-                  <span className={p.id === myPlayerId ? 'text-emerald-400 font-semibold' : p.isFolded ? 'text-slate-600 line-through' : 'text-white'}>
-                    {p.displayName}
-                  </span>
-                </span>
-                <span className="flex items-center gap-3">
-                  {p.currentBet > 0 && (
-                    <span className="text-yellow-400 font-mono text-sm">{p.currentBet}</span>
-                  )}
-                  <span data-testid={`chips-${p.displayName}`} className="text-slate-300 font-mono">{p.chipCount}</span>
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-
-        {isMyTurn && !state.roundComplete && state.phase !== 'showdown' && (
-          <div data-testid="action-buttons" className="space-y-2 mb-4">
-            <div className="flex gap-2">
-              <button
-                data-testid="btn-fold"
-                onClick={onFold}
-                className="flex-1 bg-red-700 hover:bg-red-600 text-white font-semibold py-2 rounded"
-              >
-                Fold
-              </button>
-              {canCheck && (
-                <button
-                  data-testid="btn-check"
-                  onClick={onCheck}
-                  className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-semibold py-2 rounded"
-                >
-                  Check
-                </button>
-              )}
-              {canCall && (
-                <button
-                  data-testid="btn-call"
-                  onClick={onCall}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded"
-                >
-                  Call {callAmount}
-                </button>
-              )}
-              <button
-                data-testid="btn-allin"
-                onClick={onAllin}
-                className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white font-semibold py-2 rounded"
-              >
-                All-In ({me?.chipCount ?? 0})
-              </button>
-            </div>
-            {state.currentBet === 0 ? (
-              <div className="flex gap-2">
-                <input
-                  data-testid="bet-input"
-                  type="number"
-                  min={state.bigBlind}
-                  step={1}
-                  value={betInput}
-                  onChange={(e) => setBetInput(e.target.value)}
-                  className="flex-1 bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  data-testid="btn-bet"
-                  onClick={() => { if (canBet) onBet(parsedBet); }}
-                  disabled={!canBet}
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded disabled:opacity-40"
-                >
-                  Bet {betInputValid ? parsedBet : ''}
-                </button>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <input
-                  data-testid="raise-input"
-                  type="number"
-                  min={minBetOrRaise}
-                  step={1}
-                  value={betInput}
-                  onChange={(e) => setBetInput(e.target.value)}
-                  className="flex-1 bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  data-testid="btn-raise"
-                  onClick={() => { if (canRaise) onRaise(parsedBet); }}
-                  disabled={!canRaise}
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded disabled:opacity-40"
-                >
-                  Raise to {betInputValid ? parsedBet : ''}
-                </button>
-              </div>
-            )}
+      )}
+      <div className={`p-4 transition-opacity ${!isHost && isPaused ? 'opacity-50' : ''}`}>
+        <div className="max-w-sm mx-auto pt-8">
+          <div className="text-center mb-6">
+            <p className="text-slate-400 text-xs uppercase tracking-wide mb-1">Pot</p>
+            <p data-testid="pot" className="text-3xl font-bold text-white">{state.pot}</p>
+            <p data-testid="round-label" className="text-slate-500 text-xs mt-1 uppercase tracking-wide">{state.round}</p>
           </div>
-        )}
 
-        {isHost && state.pot === 0 && (
-          <button
-            data-testid="new-hand-btn"
-            onClick={onNewHand}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded"
-          >
-            New Hand
-          </button>
-        )}
+          <ul className="space-y-2 mb-6">
+            {state.players.map((p, i) => {
+              const isButton = i === state.dealerButtonIndex;
+              const isActive = i === state.activePlayerIndex;
+              const isSB = i === sbIdx;
+              const isBB = i === bbIdx;
+              return (
+                <li
+                  key={p.id}
+                  data-testid={`player-row-${p.displayName}`}
+                  className={`flex justify-between items-center rounded-lg px-4 py-3 ${isActive ? 'bg-slate-700 ring-1 ring-emerald-500' : 'bg-slate-800'}`}
+                >
+                  <span className="flex items-center gap-2">
+                    {isButton && (
+                      <span className="text-xs bg-yellow-600 text-yellow-100 px-1.5 py-0.5 rounded-full font-mono">D</span>
+                    )}
+                    {isSB && (
+                      <span data-testid={`badge-sb-${p.displayName}`} className="text-xs bg-blue-700 text-blue-100 px-1.5 py-0.5 rounded-full font-mono">SB</span>
+                    )}
+                    {isBB && (
+                      <span data-testid={`badge-bb-${p.displayName}`} className="text-xs bg-violet-700 text-violet-100 px-1.5 py-0.5 rounded-full font-mono">BB</span>
+                    )}
+                    <span className={p.id === myPlayerId ? 'text-emerald-400 font-semibold' : p.isFolded ? 'text-slate-600 line-through' : 'text-white'}>
+                      {p.displayName}
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-3">
+                    {p.currentBet > 0 && (
+                      <span className="text-yellow-400 font-mono text-sm">{p.currentBet}</span>
+                    )}
+                    <span data-testid={`chips-${p.displayName}`} className="text-slate-300 font-mono">{p.chipCount}</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
 
-        {isHost && state.phase === 'showdown' && state.pot > 0 && (
-          <DeclareWinnerPanel state={state} onDeclareWinner={onDeclareWinner} />
-        )}
+          {isMyTurn && !state.roundComplete && state.phase !== 'showdown' && !isPaused && (
+            <div data-testid="action-buttons" className="space-y-2 mb-4">
+              <div className="flex gap-2">
+                <button
+                  data-testid="btn-fold"
+                  onClick={onFold}
+                  className="flex-1 bg-red-700 hover:bg-red-600 text-white font-semibold py-2 rounded"
+                >
+                  Fold
+                </button>
+                {canCheck && (
+                  <button
+                    data-testid="btn-check"
+                    onClick={onCheck}
+                    className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-semibold py-2 rounded"
+                  >
+                    Check
+                  </button>
+                )}
+                {canCall && (
+                  <button
+                    data-testid="btn-call"
+                    onClick={onCall}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded"
+                  >
+                    Call {callAmount}
+                  </button>
+                )}
+                <button
+                  data-testid="btn-allin"
+                  onClick={onAllin}
+                  className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white font-semibold py-2 rounded"
+                >
+                  All-In ({me?.chipCount ?? 0})
+                </button>
+              </div>
+              {state.currentBet === 0 ? (
+                <div className="flex gap-2">
+                  <input
+                    data-testid="bet-input"
+                    type="number"
+                    min={state.bigBlind}
+                    step={1}
+                    value={betInput}
+                    onChange={(e) => setBetInput(e.target.value)}
+                    className="flex-1 bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    data-testid="btn-bet"
+                    onClick={() => { if (canBet) onBet(parsedBet); }}
+                    disabled={!canBet}
+                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded disabled:opacity-40"
+                  >
+                    Bet {betInputValid ? parsedBet : ''}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    data-testid="raise-input"
+                    type="number"
+                    min={minBetOrRaise}
+                    step={1}
+                    value={betInput}
+                    onChange={(e) => setBetInput(e.target.value)}
+                    className="flex-1 bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    data-testid="btn-raise"
+                    onClick={() => { if (canRaise) onRaise(parsedBet); }}
+                    disabled={!canRaise}
+                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded disabled:opacity-40"
+                  >
+                    Raise to {betInputValid ? parsedBet : ''}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
-        {isHost && state.roundComplete && state.round !== 'showdown' && state.pot > 0 && (
-          <button
-            data-testid="advance-round-btn"
-            onClick={onAdvanceRound}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded"
-          >
-            Advance Round
-          </button>
-        )}
+          {isHost && (
+            <HostPanel
+              state={state}
+              onNewHand={onNewHand}
+              onAdvanceRound={onAdvanceRound}
+              onDeclareWinner={onDeclareWinner}
+              onPause={onPause}
+              onResume={onResume}
+            />
+          )}
 
-        <ActionLog entries={state.log} />
+          <ActionLog entries={state.log} />
+        </div>
       </div>
+    </div>
+  );
+}
+
+function advanceRoundLabel(round: GameState['round']): string {
+  if (round === 'preflop') return 'Deal Flop';
+  if (round === 'flop') return 'Deal Turn';
+  if (round === 'turn') return 'Deal River';
+  return 'Go to Showdown';
+}
+
+function HostPanel({
+  state,
+  onNewHand,
+  onAdvanceRound,
+  onDeclareWinner,
+  onPause,
+  onResume,
+}: {
+  state: GameState;
+  onNewHand: () => void;
+  onAdvanceRound: () => void;
+  onDeclareWinner: (playerId: string) => void;
+  onPause: () => void;
+  onResume: () => void;
+}) {
+  const [rebuyPlayerId, setRebuyPlayerId] = useState(state.players[0]?.id ?? '');
+  const [rebuyAmount, setRebuyAmount] = useState(String(state.startingStack));
+
+  return (
+    <div className="mt-4 bg-slate-800 rounded-xl p-4 space-y-3">
+      <p className="text-slate-400 text-xs uppercase tracking-wide">Host Controls</p>
+
+      {state.pot === 0 && (
+        <button
+          data-testid="new-hand-btn"
+          onClick={onNewHand}
+          className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded"
+        >
+          New Hand
+        </button>
+      )}
+
+      {state.roundComplete && state.phase !== 'showdown' && state.pot > 0 && (
+        <button
+          data-testid="advance-round-btn"
+          onClick={onAdvanceRound}
+          className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded"
+        >
+          {advanceRoundLabel(state.round)}
+        </button>
+      )}
+
+      {state.phase === 'showdown' && state.pot > 0 && (
+        <DeclareWinnerPanel state={state} onDeclareWinner={onDeclareWinner} />
+      )}
+
+      <div className="space-y-2">
+        <p className="text-slate-500 text-xs uppercase tracking-wide">Rebuy</p>
+        <select
+          data-testid="rebuy-player-select"
+          value={rebuyPlayerId}
+          onChange={(e) => setRebuyPlayerId(e.target.value)}
+          className="w-full bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        >
+          {state.players.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.displayName} ({p.chipCount} chips{p.isEliminated ? ', eliminated' : ''})
+            </option>
+          ))}
+        </select>
+        <div className="flex gap-2">
+          <input
+            data-testid="rebuy-amount-input"
+            type="number"
+            min={1}
+            step={1}
+            value={rebuyAmount}
+            onChange={(e) => setRebuyAmount(e.target.value)}
+            className="flex-1 bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+          <button
+            data-testid="rebuy-btn"
+            disabled
+            className="flex-1 bg-slate-600 text-slate-400 font-semibold py-2 rounded cursor-not-allowed opacity-50"
+          >
+            Rebuy
+          </button>
+        </div>
+      </div>
+
+      {state.phase === 'active' && (
+        <button
+          data-testid="pause-btn"
+          onClick={onPause}
+          className="w-full bg-orange-600 hover:bg-orange-500 text-white font-semibold py-2 rounded"
+        >
+          Pause Game
+        </button>
+      )}
+
+      {state.phase === 'paused' && (
+        <button
+          data-testid="resume-btn"
+          onClick={onResume}
+          className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded"
+        >
+          Resume Game
+        </button>
+      )}
     </div>
   );
 }
