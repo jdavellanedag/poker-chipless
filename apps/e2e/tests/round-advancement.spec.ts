@@ -7,7 +7,7 @@ async function createSession(browser: Browser, hostName: string) {
   await page.getByPlaceholder('Your display name (host)').fill(hostName);
   await page.getByRole('button', { name: 'Create Game' }).click();
   const code = await page.locator('p.font-mono').first().textContent();
-  await expect(page.getByText(hostName)).toBeVisible();
+  await expect(page.getByTestId(`player-row-${hostName}`)).toBeVisible();
   return { ctx, page, code: code! };
 }
 
@@ -19,7 +19,7 @@ async function joinSession(browser: Browser, code: string, playerName: string) {
   await page.getByPlaceholder('Session code').fill(code);
   await page.getByPlaceholder('Your display name').fill(playerName);
   await page.getByRole('button', { name: 'Join' }).click();
-  await expect(page.getByText(playerName)).toBeVisible();
+  await expect(page.getByTestId(`player-row-${playerName}`)).toBeVisible();
   return { ctx, page };
 }
 
@@ -77,8 +77,8 @@ test.describe('Advance Round', () => {
 
     await hostPage.getByTestId('advance-round-btn').click();
 
-    await expect(hostPage.getByText('flop')).toBeVisible();
-    await expect(bobPage.getByText('flop')).toBeVisible();
+    await expect(hostPage.getByTestId('round-label')).toHaveText('flop');
+    await expect(bobPage.getByTestId('round-label')).toHaveText('flop');
 
     await hostCtx.close();
     await bobCtx.close();
@@ -89,7 +89,7 @@ async function advanceToShowdown(hostPage: import('@playwright/test').Page, bobP
   // In heads-up post-flop: Bob (non-button) acts first, then Alice (button)
   for (const round of ['flop', 'turn', 'river'] as const) {
     await hostPage.getByTestId('advance-round-btn').click();
-    await expect(hostPage.getByText(round)).toBeVisible(); // wait for state to settle
+    await expect(hostPage.getByTestId('round-label')).toHaveText(round); // wait for state to settle
     await expect(bobPage.getByTestId('action-buttons')).toBeVisible();
     await bobPage.getByTestId('btn-check').click();
     await expect(hostPage.getByTestId('action-buttons')).toBeVisible();
@@ -97,7 +97,7 @@ async function advanceToShowdown(hostPage: import('@playwright/test').Page, bobP
     await expect(hostPage.getByTestId('advance-round-btn')).toBeVisible();
   }
   await hostPage.getByTestId('advance-round-btn').click();
-  await expect(hostPage.getByText('showdown')).toBeVisible();
+  await expect(hostPage.getByTestId('round-label')).toHaveText('showdown');
 }
 
 test.describe('Declare Winner at showdown', () => {
@@ -182,7 +182,7 @@ test.describe('Declare Winner at showdown', () => {
 
     // Advance to flop: Bob acts first, Carol folds, Alice checks → roundComplete
     await hostPage.getByTestId('advance-round-btn').click();
-    await expect(hostPage.getByText('flop')).toBeVisible();
+    await expect(hostPage.getByTestId('round-label')).toHaveText('flop');
     await expect(bobPage.getByTestId('action-buttons')).toBeVisible();
     await bobPage.getByTestId('btn-check').click();
     await expect(carolPage.getByTestId('action-buttons')).toBeVisible();
@@ -194,7 +194,7 @@ test.describe('Declare Winner at showdown', () => {
     // Advance through turn and river (only Bob and Alice remain)
     for (const round of ['turn', 'river'] as const) {
       await hostPage.getByTestId('advance-round-btn').click();
-      await expect(hostPage.getByText(round)).toBeVisible();
+      await expect(hostPage.getByTestId('round-label')).toHaveText(round);
       await expect(bobPage.getByTestId('action-buttons')).toBeVisible();
       await bobPage.getByTestId('btn-check').click();
       await expect(hostPage.getByTestId('action-buttons')).toBeVisible();
@@ -202,7 +202,7 @@ test.describe('Declare Winner at showdown', () => {
       await expect(hostPage.getByTestId('advance-round-btn')).toBeVisible();
     }
     await hostPage.getByTestId('advance-round-btn').click();
-    await expect(hostPage.getByText('showdown')).toBeVisible();
+    await expect(hostPage.getByTestId('round-label')).toHaveText('showdown');
     await expect(hostPage.getByTestId('declare-winner-panel')).toBeVisible();
 
     // Winner select must not contain Carol (she folded)
@@ -256,7 +256,7 @@ test.describe('Fold-win showdown', () => {
 
     // Alice folds → round label becomes 'showdown', pot remains 30
     await hostPage.getByTestId('btn-fold').click();
-    await expect(hostPage.getByText('showdown')).toBeVisible();
+    await expect(hostPage.getByTestId('round-label')).toHaveText('showdown');
     await expect(hostPage.getByTestId('pot')).toHaveText('30');
 
     // Only host sees Accept button; Bob does not see declare-winner-panel
@@ -305,11 +305,11 @@ test.describe('Game ends when only one player remains', () => {
     // Both all-in — each round auto-completes; wait for round label to settle between advances
     await expect(hostPage.getByTestId('advance-round-btn')).toBeVisible();
     await hostPage.getByTestId('advance-round-btn').click(); // → flop
-    await expect(hostPage.getByText('flop')).toBeVisible();
+    await expect(hostPage.getByTestId('round-label')).toHaveText('flop');
     await hostPage.getByTestId('advance-round-btn').click(); // → turn
-    await expect(hostPage.getByText('turn')).toBeVisible();
+    await expect(hostPage.getByTestId('round-label')).toHaveText('turn');
     await hostPage.getByTestId('advance-round-btn').click(); // → river
-    await expect(hostPage.getByText('river')).toBeVisible();
+    await expect(hostPage.getByTestId('round-label')).toHaveText('river');
     await hostPage.getByTestId('advance-round-btn').click(); // → showdown
 
     await expect(hostPage.getByTestId('declare-winner-panel')).toBeVisible();

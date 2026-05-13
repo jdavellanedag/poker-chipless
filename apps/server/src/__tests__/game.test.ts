@@ -1,6 +1,27 @@
 import { describe, it, expect } from 'vitest';
 import { createSession, joinSession } from '../session.js';
-import { startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, withValidActions, advanceRound, declareWinner } from '../game.js';
+import { appendLog, startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, withValidActions, advanceRound, declareWinner, pause, resume, rebuy } from '../game.js';
+
+describe('appendLog', () => {
+  it('appends an entry with the given message and an ISO timestamp to state.log', () => {
+    const { state } = createSession('Alice');
+    const before = state.log.length;
+
+    const next = appendLog(state, 'hello world');
+
+    expect(next.log).toHaveLength(before + 1);
+    const entry = next.log[next.log.length - 1];
+    expect(entry.message).toBe('hello world');
+    expect(new Date(entry.timestamp).toISOString()).toBe(entry.timestamp);
+  });
+
+  it('does not mutate the original state', () => {
+    const { state } = createSession('Alice');
+    const original = state.log.length;
+    appendLog(state, 'side effect?');
+    expect(state.log).toHaveLength(original);
+  });
+});
 
 function makelobby(playerNames: string[]) {
   const [host, ...rest] = playerNames;
@@ -998,5 +1019,85 @@ describe('validActions during showdown', () => {
     afterBobFold.state.players.forEach((p) => {
       expect(p.validActions).toHaveLength(0);
     });
+  });
+});
+
+describe('startGame log', () => {
+  it('appends "Game started. Stack: 1000, Blinds: 10/20" to the log', () => {
+    const state = makelobby(['Alice', 'Bob']);
+    const result = startGame(state, { startingStack: 1000, smallBlind: 10, bigBlind: 20 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const messages = result.state.log.map((e) => e.message);
+    expect(messages).toContain('Game started. Stack: 1000, Blinds: 10/20');
+  });
+});
+
+describe('pause', () => {
+  it('transitions phase to paused and logs "Game paused by host"', () => {
+    const state = makeActive(['Alice', 'Bob']);
+    const result = pause(state);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.phase).toBe('paused');
+    expect(result.state.log.map((e) => e.message)).toContain('Game paused by host');
+  });
+
+  it('rejects when game is not active', () => {
+    const state = { ...makeActive(['Alice', 'Bob']), phase: 'paused' as const };
+    const result = pause(state);
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('resume', () => {
+  it('transitions phase back to active and logs "Game resumed by host"', () => {
+    const state = { ...makeActive(['Alice', 'Bob']), phase: 'paused' as const };
+    const result = resume(state);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.phase).toBe('active');
+    expect(result.state.log.map((e) => e.message)).toContain('Game resumed by host');
+  });
+
+  it('rejects when game is not paused', () => {
+    const state = makeActive(['Alice', 'Bob']);
+    const result = resume(state);
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('rebuy', () => {
+  it('adds chips to the player and logs "Alice re-buys 500 chips"', () => {
+    const state = makeActive(['Alice', 'Bob']);
+    const alice = state.players[0];
+    const result = rebuy(state, alice.id, 500);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.players[0].chipCount).toBe(alice.chipCount + 500);
+    expect(result.state.log.map((e) => e.message)).toContain('Alice re-buys 500 chips');
+  });
+
+  it('un-eliminates a player who was eliminated', () => {
+    const state = makeActive(['Alice', 'Bob']);
+    const eliminated = { ...state.players[0], chipCount: 0, isEliminated: true };
+    const withElim = { ...state, players: [eliminated, state.players[1]] };
+    const result = rebuy(withElim, eliminated.id, 200);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.players[0].isEliminated).toBe(false);
+    expect(result.state.players[0].chipCount).toBe(200);
+  });
+
+  it('rejects a non-positive rebuy amount', () => {
+    const state = makeActive(['Alice', 'Bob']);
+    const result = rebuy(state, state.players[0].id, 0);
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects an unknown player id', () => {
+    const state = makeActive(['Alice', 'Bob']);
+    const result = rebuy(state, 'no-such-id', 100);
+    expect(result.ok).toBe(false);
   });
 });

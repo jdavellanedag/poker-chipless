@@ -1,10 +1,10 @@
 ---
-status: in-progress
+status: done
 ---
 
 # Action Log
 
-> **Status:** `in-progress`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._
