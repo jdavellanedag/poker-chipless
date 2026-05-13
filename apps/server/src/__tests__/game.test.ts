@@ -898,3 +898,105 @@ describe('declareWinner', () => {
     expect(result.state.pot).toBe(0);
   });
 });
+
+describe('validActions during showdown', () => {
+  it('all players have empty validActions after river → showdown via advanceRound', () => {
+    // River is complete; host advances to showdown. No player should have any valid actions.
+    const hand = makeHand(['Alice', 'Bob']);
+    const riverDone = {
+      ...hand,
+      round: 'river' as const,
+      roundComplete: true,
+      pot: 100,
+      players: hand.players.map((p) => ({ ...p, hasActedThisRound: true, currentBet: 0 })),
+    };
+
+    const result = advanceRound(riverDone);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.phase).toBe('showdown');
+    result.state.players.forEach((p) => {
+      expect(p.validActions).toHaveLength(0);
+    });
+  });
+
+  it('all players have empty validActions after last player checks on the river and host advances to showdown', () => {
+    // Simulate the exact user-reported scenario: last player checks → roundComplete →
+    // host advances to showdown → no player should see action buttons.
+    const hand = makeHand(['Alice', 'Bob', 'Carol']);
+    // Put everyone in a river state where Bob and Carol already acted; Alice checks last.
+    const riverState = {
+      ...hand,
+      round: 'river' as const,
+      currentBet: 0,
+      pot: 150,
+      players: hand.players.map((p, i) => ({
+        ...p,
+        currentBet: 0,
+        hasActedThisRound: i !== 0, // Bob and Carol already acted; Alice(0) is active
+      })),
+      activePlayerIndex: 0,
+      roundComplete: false,
+    };
+    const afterCheck = check(riverState, riverState.players[0].id); // Alice checks
+    expect(afterCheck.ok).toBe(true);
+    if (!afterCheck.ok) return;
+    expect(afterCheck.state.roundComplete).toBe(true); // round should be complete
+
+    const afterAdvance = advanceRound(afterCheck.state);
+    expect(afterAdvance.ok).toBe(true);
+    if (!afterAdvance.ok) return;
+    expect(afterAdvance.state.phase).toBe('showdown');
+    afterAdvance.state.players.forEach((p) => {
+      expect(p.validActions).toHaveLength(0);
+    });
+  });
+
+  it('all players have empty validActions after last player calls on the river and host advances to showdown', () => {
+    const hand = makeHand(['Alice', 'Bob', 'Carol']);
+    // Bob bet 100; Alice and Carol already matched; Alice is last and calls.
+    const riverState = {
+      ...hand,
+      round: 'river' as const,
+      currentBet: 100,
+      pot: 200,
+      players: hand.players.map((p, i) => ({
+        ...p,
+        currentBet: i === 0 ? 0 : 100, // Alice(0) hasn't matched yet
+        chipCount: i === 0 ? p.chipCount : p.chipCount - 100,
+        hasActedThisRound: i !== 0,
+      })),
+      activePlayerIndex: 0,
+      roundComplete: false,
+    };
+    const afterCall = call(riverState, riverState.players[0].id); // Alice calls
+    expect(afterCall.ok).toBe(true);
+    if (!afterCall.ok) return;
+    expect(afterCall.state.roundComplete).toBe(true);
+
+    const afterAdvance = advanceRound(afterCall.state);
+    expect(afterAdvance.ok).toBe(true);
+    if (!afterAdvance.ok) return;
+    expect(afterAdvance.state.phase).toBe('showdown');
+    afterAdvance.state.players.forEach((p) => {
+      expect(p.validActions).toHaveLength(0);
+    });
+  });
+
+  it('all players have empty validActions in fold-win showdown', () => {
+    // When all but one player fold, the game enters showdown immediately.
+    const hand = makeHand(['Alice', 'Bob', 'Carol']);
+    // Alice and Bob fold; Carol wins by default → showdown
+    const afterAliceFold = fold(hand, hand.players[0].id);
+    expect(afterAliceFold.ok).toBe(true);
+    if (!afterAliceFold.ok) return;
+    const afterBobFold = fold(afterAliceFold.state, afterAliceFold.state.players[1].id);
+    expect(afterBobFold.ok).toBe(true);
+    if (!afterBobFold.ok) return;
+    expect(afterBobFold.state.phase).toBe('showdown');
+    afterBobFold.state.players.forEach((p) => {
+      expect(p.validActions).toHaveLength(0);
+    });
+  });
+});

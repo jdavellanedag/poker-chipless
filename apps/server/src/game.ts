@@ -124,7 +124,7 @@ function nextFoldAwareIndex(players: GameState['players'], fromIndex: number): n
 export function withValidActions(state: GameState): GameState {
   const active = state.players[state.activePlayerIndex];
   const players = state.players.map((p) => {
-    if (p.id !== active?.id || p.isEliminated || p.isFolded || p.isAllIn || state.roundComplete) {
+    if (p.id !== active?.id || p.isEliminated || p.isFolded || p.isAllIn || state.roundComplete || state.phase === 'showdown') {
       return { ...p, validActions: [] as GameState['players'][number]['validActions'] };
     }
     const callAmount = state.currentBet - p.currentBet;
