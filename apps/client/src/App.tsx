@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import type { GameState } from '@poker-chipless/types';
+import { useState, useEffect, useRef } from 'react';
+import type { GameState, LogEntry } from '@poker-chipless/types';
 import socket from './socket.js';
 
 export default function App() {
@@ -383,6 +383,8 @@ function LobbyScreen({
         ) : (
           <p className="text-center text-slate-400 mt-4">Waiting for host to start…</p>
         )}
+
+        <ActionLog entries={state.log} />
       </div>
     </div>
   );
@@ -458,7 +460,7 @@ function GameScreen({
         <div className="text-center mb-6">
           <p className="text-slate-400 text-xs uppercase tracking-wide mb-1">Pot</p>
           <p data-testid="pot" className="text-3xl font-bold text-white">{state.pot}</p>
-          <p className="text-slate-500 text-xs mt-1 uppercase tracking-wide">{state.round}</p>
+          <p data-testid="round-label" className="text-slate-500 text-xs mt-1 uppercase tracking-wide">{state.round}</p>
         </div>
 
         <ul className="space-y-2 mb-6">
@@ -601,6 +603,8 @@ function GameScreen({
             Advance Round
           </button>
         )}
+
+        <ActionLog entries={state.log} />
       </div>
     </div>
   );
@@ -653,6 +657,40 @@ function DeclareWinnerPanel({
       >
         Declare Winner
       </button>
+    </div>
+  );
+}
+
+function formatTimestamp(iso: string): string {
+  const d = new Date(iso);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
+}
+
+function ActionLog({ entries }: { entries: LogEntry[] }) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [entries]);
+
+  return (
+    <div
+      data-testid="action-log"
+      className="mt-4 bg-slate-800 rounded-xl overflow-hidden"
+    >
+      <p className="text-slate-400 text-xs uppercase tracking-wide px-4 pt-3 pb-1">Game Log</p>
+      <div className="h-40 overflow-y-auto px-4 pb-3 space-y-1">
+        {entries.map((entry, i) => (
+          <div key={i} className="flex gap-2 text-sm">
+            <span className="text-slate-500 font-mono shrink-0">{formatTimestamp(entry.timestamp)}</span>
+            <span className="text-slate-300">{entry.message}</span>
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
     </div>
   );
 }

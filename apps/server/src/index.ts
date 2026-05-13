@@ -6,7 +6,7 @@ import express from 'express';
 import { Server } from 'socket.io';
 import type { ServerToClientEvents, ClientToServerEvents, GameState, CreateAckResponse, JoinAckResponse } from '@poker-chipless/types';
 import { createSession, joinSession } from './session.js';
-import { startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, advanceRound, declareWinner } from './game.js';
+import { appendLog, startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, advanceRound, declareWinner, pause, resume, rebuy } from './game.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -31,7 +31,8 @@ io.on('connection', (socket) => {
       ack({ ok: false, error: 'Display name cannot be empty.' });
       return;
     }
-    const { state, token } = createSession(name);
+    const { state: rawState, token } = createSession(name);
+    const state = appendLog(rawState, `${name} created the session`);
     const tokenMap = new Map<string, string>();
     const hostId = state.players[0].id;
     tokenMap.set(token, hostId);
@@ -55,12 +56,12 @@ io.on('connection', (socket) => {
       const playerId = session.tokenMap.get(token)!;
       const player = session.state.players.find((p) => p.id === playerId);
       if (player) {
-        session.state = {
+        session.state = appendLog({
           ...session.state,
           players: session.state.players.map((p) =>
             p.id === playerId ? { ...p, isConnected: true } : p,
           ),
-        };
+        }, `${player.displayName} reconnected`);
         socket.join(code.toUpperCase());
         socket.data.code = code.toUpperCase();
         socket.data.playerId = playerId;
@@ -75,8 +76,8 @@ io.on('connection', (socket) => {
       ack({ ok: false, error: result.error });
       return;
     }
-    session.state = result.state;
     const newPlayer = result.state.players[result.state.players.length - 1];
+    session.state = appendLog(result.state, `${newPlayer.displayName} joined the session`);
     session.tokenMap.set(result.token, newPlayer.id);
     socket.join(code.toUpperCase());
     socket.data.code = code.toUpperCase();
@@ -121,7 +122,7 @@ io.on('connection', (socket) => {
     if (!player?.isHost) { ack({ ok: false, error: 'Only the host can start a new hand.' }); return; }
     const activePlayers = session.state.players.filter((p) => !p.isEliminated);
     if (activePlayers.length < 2) {
-      session.state = { ...session.state, phase: 'ended' };
+      session.state = appendLog({ ...session.state, phase: 'ended' }, 'Game ended');
       io.to(code!).emit('game:state', session.state);
       ack({ ok: true });
       return;
@@ -226,17 +227,57 @@ io.on('connection', (socket) => {
     ack({ ok: true });
   });
 
+  socket.on('host:pause', (_payload, ack) => {
+    const { code, playerId } = socket.data as { code?: string; playerId?: string };
+    const session = code ? sessions.get(code) : undefined;
+    if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
+    const player = session.state.players.find((p) => p.id === playerId);
+    if (!player?.isHost) { ack({ ok: false, error: 'Only the host can pause the game.' }); return; }
+    const result = pause(session.state);
+    if (!result.ok) { ack({ ok: false, error: result.error }); return; }
+    session.state = result.state;
+    io.to(code!).emit('game:state', session.state);
+    ack({ ok: true });
+  });
+
+  socket.on('host:resume', (_payload, ack) => {
+    const { code, playerId } = socket.data as { code?: string; playerId?: string };
+    const session = code ? sessions.get(code) : undefined;
+    if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
+    const player = session.state.players.find((p) => p.id === playerId);
+    if (!player?.isHost) { ack({ ok: false, error: 'Only the host can resume the game.' }); return; }
+    const result = resume(session.state);
+    if (!result.ok) { ack({ ok: false, error: result.error }); return; }
+    session.state = result.state;
+    io.to(code!).emit('game:state', session.state);
+    ack({ ok: true });
+  });
+
+  socket.on('host:rebuy', ({ playerId: targetId, amount }, ack) => {
+    const { code, playerId } = socket.data as { code?: string; playerId?: string };
+    const session = code ? sessions.get(code) : undefined;
+    if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
+    const player = session.state.players.find((p) => p.id === playerId);
+    if (!player?.isHost) { ack({ ok: false, error: 'Only the host can issue a rebuy.' }); return; }
+    const result = rebuy(session.state, targetId, amount);
+    if (!result.ok) { ack({ ok: false, error: result.error }); return; }
+    session.state = result.state;
+    io.to(code!).emit('game:state', session.state);
+    ack({ ok: true });
+  });
+
   socket.on('disconnect', () => {
     const { code, playerId } = socket.data as { code?: string; playerId?: string };
     if (!code || !playerId) return;
     const session = sessions.get(code);
     if (!session) return;
-    session.state = {
+    const player = session.state.players.find((p) => p.id === playerId);
+    session.state = appendLog({
       ...session.state,
       players: session.state.players.map((p) =>
         p.id === playerId ? { ...p, isConnected: false } : p,
       ),
-    };
+    }, player ? `${player.displayName} disconnected` : 'A player disconnected');
     io.to(code).emit('game:state', session.state);
   });
 });

@@ -8,7 +8,7 @@ async function createSession(browser: Browser, hostName: string) {
   await page.getByRole('button', { name: 'Create Game' }).click();
   const code = await page.locator('p.font-mono').first().textContent();
   // wait for lobby
-  await expect(page.getByText(hostName)).toBeVisible();
+  await expect(page.getByTestId(`player-row-${hostName}`)).toBeVisible();
   return { ctx, page, code: code! };
 }
 
@@ -20,7 +20,7 @@ async function joinSession(browser: Browser, code: string, playerName: string) {
   await page.getByPlaceholder('Session code').fill(code);
   await page.getByPlaceholder('Your display name').fill(playerName);
   await page.getByRole('button', { name: 'Join' }).click();
-  await expect(page.getByText(playerName)).toBeVisible();
+  await expect(page.getByTestId(`player-row-${playerName}`)).toBeVisible();
   return { ctx, page };
 }
 

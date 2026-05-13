@@ -17,7 +17,7 @@ test.describe('Session creation', () => {
     await page.getByRole('button', { name: 'Create Game' }).click();
 
     // Host transitions directly to the lobby screen
-    await expect(page.getByText('Alice')).toBeVisible();
+    await expect(page.getByTestId('player-row-Alice')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Start Game' })).toBeVisible();
   });
 
@@ -51,8 +51,8 @@ test.describe('Session join flow', () => {
     await playerPage.getByRole('button', { name: 'Join' }).click();
 
     // Both land in the lobby and see each other
-    await expect(hostPage.getByText('Bob')).toBeVisible();
-    await expect(playerPage.getByText('Alice')).toBeVisible();
+    await expect(hostPage.getByTestId('player-row-Bob')).toBeVisible();
+    await expect(playerPage.getByTestId('player-row-Alice')).toBeVisible();
 
     await hostCtx.close();
     await playerCtx.close();
@@ -110,7 +110,7 @@ test.describe('Session join flow', () => {
     await playerPage.getByRole('button', { name: 'Join' }).click();
 
     // Wait for lobby to confirm join completed
-    await expect(playerPage.getByText('Alice')).toBeVisible();
+    await expect(playerPage.getByTestId('player-row-Alice')).toBeVisible();
 
     const token = await playerPage.evaluate(() => sessionStorage.getItem('session_token'));
     expect(token).toMatch(/^[0-9a-f-]{36}$/); // UUID format

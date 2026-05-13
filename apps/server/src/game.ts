@@ -1,6 +1,13 @@
-import type { GameState, LogEntry } from '@poker-chipless/types';
+import type { GameState } from '@poker-chipless/types';
 
 type GameResult = { ok: true; state: GameState } | { ok: false; error: string };
+
+export function appendLog(state: GameState, message: string): GameState {
+  return {
+    ...state,
+    log: [...state.log, { timestamp: new Date().toISOString(), message }],
+  };
+}
 
 export function startGame(
   state: GameState,
@@ -24,14 +31,14 @@ export function startGame(
   }
   return {
     ok: true,
-    state: {
+    state: appendLog({
       ...state,
       phase: 'active',
       smallBlind,
       bigBlind,
       dealerButtonIndex: -1, // sentinel: no hand dealt yet
       players: state.players.map((p) => ({ ...p, chipCount: startingStack })),
-    },
+    }, `Game started. Stack: ${startingStack}, Blinds: ${smallBlind}/${bigBlind}`),
   };
 }
 
@@ -67,7 +74,6 @@ export function newHand(state: GameState): GameResult {
     activePlayers.length === 2 ? buttonIndex : nextActiveIndex(state.players, bbIndex);
 
   const players = state.players.map((p) => ({ ...p, currentBet: 0, isAllIn: false, isFolded: false, hasActedThisRound: false }));
-  const log: LogEntry[] = [...state.log];
 
   const sbPlayer = players[sbIndex];
   const sbAmount = Math.min(state.smallBlind, sbPlayer.chipCount);
@@ -77,10 +83,6 @@ export function newHand(state: GameState): GameResult {
     currentBet: sbAmount,
     isAllIn: sbPlayer.chipCount <= state.smallBlind,
   };
-  log.push({
-    timestamp: new Date().toISOString(),
-    message: `${sbPlayer.displayName} posts small blind: ${sbAmount}`,
-  });
 
   const bbPlayer = players[bbIndex];
   const bbAmount = Math.min(state.bigBlind, bbPlayer.chipCount);
@@ -90,15 +92,16 @@ export function newHand(state: GameState): GameResult {
     currentBet: bbAmount,
     isAllIn: bbPlayer.chipCount <= state.bigBlind,
   };
-  log.push({
-    timestamp: new Date().toISOString(),
-    message: `${bbPlayer.displayName} posts big blind: ${bbAmount}`,
-  });
+
+  const withBlinds = appendLog(
+    appendLog({ ...state, players }, `${sbPlayer.displayName} posts small blind: ${sbAmount}`),
+    `${bbPlayer.displayName} posts big blind: ${bbAmount}`,
+  );
 
   return {
     ok: true,
     state: withValidActions({
-      ...state,
+      ...withBlinds,
       round: 'preflop',
       dealerButtonIndex: buttonIndex,
       activePlayerIndex: utgIndex,
@@ -106,8 +109,6 @@ export function newHand(state: GameState): GameResult {
       currentBet: state.bigBlind,
       lastRaiseSize: state.bigBlind,
       roundComplete: false,
-      players,
-      log,
     }),
   };
 }
@@ -144,14 +145,7 @@ function detectRoundComplete(state: GameState): GameState {
   const allActed = contesting.every((p) => p.isAllIn || p.hasActedThisRound);
   const allMatched = contesting.every((p) => p.isAllIn || p.currentBet === state.currentBet);
   if (!allActed || !allMatched || state.roundComplete) return withValidActions(state);
-  return withValidActions({
-    ...state,
-    roundComplete: true,
-    log: [
-      ...state.log,
-      { timestamp: new Date().toISOString(), message: 'Betting round complete. Host may advance.' },
-    ],
-  });
+  return withValidActions(appendLog({ ...state, roundComplete: true }, 'Betting round complete. Host may advance.'));
 }
 
 export function fold(state: GameState, playerId: string): GameResult {
@@ -166,10 +160,7 @@ export function fold(state: GameState, playerId: string): GameResult {
   const players = state.players.map((p, i) =>
     i === state.activePlayerIndex ? { ...p, isFolded: true, hasActedThisRound: true } : p,
   );
-  const log = [
-    ...state.log,
-    { timestamp: new Date().toISOString(), message: `${activePlayer.displayName} folds` },
-  ];
+  const afterFold = appendLog({ ...state, players }, `${activePlayer.displayName} folds`);
 
   const contesting = players.filter((p) => !p.isFolded && !p.isEliminated);
   if (contesting.length === 1) {
@@ -177,23 +168,18 @@ export function fold(state: GameState, playerId: string): GameResult {
     const winnerIndex = players.findIndex((p) => p.id === winner.id);
     return {
       ok: true,
-      state: withValidActions({
-        ...state,
+      state: withValidActions(appendLog({
+        ...afterFold,
         phase: 'showdown',
         round: 'showdown',
-        players,
         activePlayerIndex: winnerIndex,
         roundComplete: true,
-        log: [
-          ...log,
-          { timestamp: new Date().toISOString(), message: `${winner.displayName} wins ${state.pot} (everyone else folded)` },
-        ],
-      }),
+      }, `${winner.displayName} wins ${state.pot} (everyone else folded)`)),
     };
   }
 
   const nextIndex = nextFoldAwareIndex(players, state.activePlayerIndex);
-  return { ok: true, state: detectRoundComplete({ ...state, players, log, activePlayerIndex: nextIndex }) };
+  return { ok: true, state: detectRoundComplete({ ...afterFold, activePlayerIndex: nextIndex }) };
 }
 
 export function check(state: GameState, playerId: string): GameResult {
@@ -211,13 +197,11 @@ export function check(state: GameState, playerId: string): GameResult {
   const players = state.players.map((p, i) =>
     i === state.activePlayerIndex ? { ...p, hasActedThisRound: true } : p,
   );
-  const log = [
-    ...state.log,
-    { timestamp: new Date().toISOString(), message: `${activePlayer.displayName} checks` },
-  ];
-
   const nextIndex = nextFoldAwareIndex(players, state.activePlayerIndex);
-  return { ok: true, state: detectRoundComplete({ ...state, players, log, activePlayerIndex: nextIndex }) };
+  return {
+    ok: true,
+    state: detectRoundComplete(appendLog({ ...state, players, activePlayerIndex: nextIndex }, `${activePlayer.displayName} checks`)),
+  };
 }
 
 export function call(state: GameState, playerId: string): GameResult {
@@ -237,15 +221,13 @@ export function call(state: GameState, playerId: string): GameResult {
       ? { ...p, chipCount: p.chipCount - actualAmount, currentBet: p.currentBet + actualAmount, hasActedThisRound: true, isAllIn: goesAllIn || p.isAllIn }
       : p,
   );
-  const log = [
-    ...state.log,
-    { timestamp: new Date().toISOString(), message: `${activePlayer.displayName} calls ${actualAmount}` },
-  ];
-
   const nextIndex = nextFoldAwareIndex(players, state.activePlayerIndex);
   return {
     ok: true,
-    state: detectRoundComplete({ ...state, players, log, pot: state.pot + actualAmount, activePlayerIndex: nextIndex }),
+    state: detectRoundComplete(appendLog(
+      { ...state, players, pot: state.pot + actualAmount, activePlayerIndex: nextIndex },
+      `${activePlayer.displayName} calls ${actualAmount}`,
+    )),
   };
 }
 
@@ -275,23 +257,13 @@ export function allin(state: GameState, playerId: string): GameResult {
     }
     return p;
   });
-  const log = [
-    ...state.log,
-    { timestamp: new Date().toISOString(), message: `${activePlayer.displayName} goes all-in for ${allInAmount}` },
-  ];
-
   const nextIndex = nextFoldAwareIndex(players, state.activePlayerIndex);
   return {
     ok: true,
-    state: detectRoundComplete({
-      ...state,
-      players,
-      log,
-      currentBet: newCurrentBet,
-      lastRaiseSize: newLastRaiseSize,
-      pot: state.pot + allInAmount,
-      activePlayerIndex: nextIndex,
-    }),
+    state: detectRoundComplete(appendLog(
+      { ...state, players, currentBet: newCurrentBet, lastRaiseSize: newLastRaiseSize, pot: state.pot + allInAmount, activePlayerIndex: nextIndex },
+      `${activePlayer.displayName} goes all-in for ${allInAmount}`,
+    )),
   };
 }
 
@@ -326,23 +298,13 @@ export function raise(state: GameState, playerId: string, raiseTotal: number): G
     }
     return p;
   });
-  const log = [
-    ...state.log,
-    { timestamp: new Date().toISOString(), message: `${activePlayer.displayName} raises to ${raiseTotal}` },
-  ];
-
   const nextIndex = nextFoldAwareIndex(players, state.activePlayerIndex);
   return {
     ok: true,
-    state: detectRoundComplete({
-      ...state,
-      players,
-      log,
-      currentBet: raiseTotal,
-      lastRaiseSize: raiseIncrement,
-      pot: state.pot + addAmount,
-      activePlayerIndex: nextIndex,
-    }),
+    state: detectRoundComplete(appendLog(
+      { ...state, players, currentBet: raiseTotal, lastRaiseSize: raiseIncrement, pot: state.pot + addAmount, activePlayerIndex: nextIndex },
+      `${activePlayer.displayName} raises to ${raiseTotal}`,
+    )),
   };
 }
 
@@ -369,23 +331,13 @@ export function bet(state: GameState, playerId: string, amount: number): GameRes
       ? { ...p, chipCount: p.chipCount - amount, currentBet: amount, hasActedThisRound: true }
       : p,
   );
-  const log = [
-    ...state.log,
-    { timestamp: new Date().toISOString(), message: `${activePlayer.displayName} bets ${amount}` },
-  ];
-
   const nextIndex = nextFoldAwareIndex(players, state.activePlayerIndex);
   return {
     ok: true,
-    state: detectRoundComplete({
-      ...state,
-      players,
-      log,
-      currentBet: amount,
-      lastRaiseSize: amount,
-      pot: state.pot + amount,
-      activePlayerIndex: nextIndex,
-    }),
+    state: detectRoundComplete(appendLog(
+      { ...state, players, currentBet: amount, lastRaiseSize: amount, pot: state.pot + amount, activePlayerIndex: nextIndex },
+      `${activePlayer.displayName} bets ${amount}`,
+    )),
   };
 }
 
@@ -426,15 +378,10 @@ export function advanceRound(state: GameState): GameResult {
     }
   }
 
-  const log = [
-    ...state.log,
-    { timestamp: new Date().toISOString(), message: ROUND_LABELS[nextRound] },
-  ];
-
   const isShowdown = nextRound === 'showdown';
   return {
     ok: true,
-    state: detectRoundComplete({
+    state: detectRoundComplete(appendLog({
       ...state,
       phase: isShowdown ? 'showdown' : state.phase,
       round: nextRound,
@@ -443,8 +390,7 @@ export function advanceRound(state: GameState): GameResult {
       roundComplete: false,
       activePlayerIndex: firstActive,
       players,
-      log,
-    }),
+    }, ROUND_LABELS[nextRound])),
   };
 }
 
@@ -470,23 +416,49 @@ export function declareWinner(state: GameState, playerId: string): GameResult {
     };
   });
 
-  const log = [
-    ...state.log,
-    {
-      timestamp: new Date().toISOString(),
-      message: `${winner.displayName} wins pot of ${potAmount}`,
-    },
-  ];
-
   return {
     ok: true,
-    state: withValidActions({
-      ...state,
-      phase: 'active',
-      pot: 0,
-      players,
-      log,
-    }),
+    state: withValidActions(appendLog(
+      { ...state, phase: 'active', pot: 0, players },
+      `${winner.displayName} wins pot of ${potAmount}`,
+    )),
+  };
+}
+
+export function pause(state: GameState): GameResult {
+  if (state.phase !== 'active') {
+    return { ok: false, error: 'Game is not active.' };
+  }
+  return {
+    ok: true,
+    state: appendLog({ ...state, phase: 'paused' }, 'Game paused by host'),
+  };
+}
+
+export function resume(state: GameState): GameResult {
+  if (state.phase !== 'paused') {
+    return { ok: false, error: 'Game is not paused.' };
+  }
+  return {
+    ok: true,
+    state: appendLog({ ...state, phase: 'active' }, 'Game resumed by host'),
+  };
+}
+
+export function rebuy(state: GameState, playerId: string, amount: number): GameResult {
+  if (amount <= 0) {
+    return { ok: false, error: 'Rebuy amount must be a positive integer.' };
+  }
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) {
+    return { ok: false, error: 'Player not found.' };
+  }
+  const players = state.players.map((p) =>
+    p.id === playerId ? { ...p, chipCount: p.chipCount + amount, isEliminated: false } : p,
+  );
+  return {
+    ok: true,
+    state: appendLog({ ...state, players }, `${player.displayName} re-buys ${amount} chips`),
   };
 }
 
