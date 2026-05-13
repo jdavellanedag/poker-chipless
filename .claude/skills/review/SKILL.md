@@ -1,39 +1,65 @@
 ---
 name: review
-description: Review the current in-progress issue branch — reads acceptance criteria, runs tests, audits the diff for gaps, fixes small issues, then asks the user to confirm a merge into main.
-argument-hint: (optional) path to issue file
+description: Review the current in-progress issue or bugfix branch — reads acceptance criteria or bug report, runs tests, audits the diff for gaps, fixes small issues, then asks the user to confirm a merge into main.
+argument-hint: (optional) path to issue or bug report file
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash]
 ---
 
-# Issue Review
+# Branch Review
 
-Review the active issue branch end-to-end, fix small gaps, then gate on user confirmation before merging to main.
+Review the active branch end-to-end, fix small gaps, then gate on user confirmation before merging to main.
 
 ---
 
 ## Phase 1: Orient
 
 1. Identify the current branch: `git branch --show-current`.
-2. Confirm it follows the `issue/<NN>-<slug>` pattern. If not, stop and tell the user — this skill only runs on issue branches.
+2. Determine the branch type:
+   - If it matches `issue/<NN>-<slug>` → **issue review** (continue with issue flow below).
+   - If it matches `bugfix/<slug>` → **bugfix review** (continue with bugfix flow below).
+   - Anything else → stop and tell the user — this skill only runs on `issue/` or `bugfix/` branches.
+
+### Issue flow
 3. Locate the matching issue file in `.scratch/*/issues/` by matching the slug. If `$ARGUMENTS` was provided, treat it as the path directly.
 4. Read the issue file in full. Extract:
    - The **goal**
    - Every **acceptance criterion** (checkbox list)
    - Any **out-of-scope** items (do not flag these as gaps)
 
+### Bugfix flow
+3. Derive the branch slug (the part after `bugfix/`).
+4. Locate the bug report file: `.scratch/<feature-slug>/bugs/<branch-slug>.md`. Find the feature slug by listing `.scratch/*/bugs/` directories. If `$ARGUMENTS` was provided, treat it as the path directly.
+5. Read the bug report file in full. Extract:
+   - The **confirmed bug description** (one-sentence summary)
+   - The **root cause** (what was wrong in the code)
+   - The **fix** (what was changed and why)
+   - The **reproduction test** (name and file path)
+   - The **affected files**
+
 ---
 
 ## Phase 2: Diff Audit
 
-1. Run `git diff main...HEAD` to get the full changeset on this branch.
-2. Map each acceptance criterion to the diff:
-   - **Covered** — criterion is clearly satisfied by the changes.
-   - **Partially covered** — implementation exists but is incomplete or incorrect.
-   - **Missing** — no change in the diff addresses this criterion.
-3. Also check for things that should NOT be present:
-   - Out-of-scope features snuck in
-   - Violations of CLAUDE.md core rules (floats in chip math, stringly-typed events, `any` types, inline styles, `console.log` in client code, etc.)
-4. Produce a concise audit table: criterion → status → notes.
+Run `git diff main...HEAD` to get the full changeset on this branch.
+
+### Issue diff audit
+Map each acceptance criterion to the diff:
+- **Covered** — criterion is clearly satisfied by the changes.
+- **Partially covered** — implementation exists but is incomplete or incorrect.
+- **Missing** — no change in the diff addresses this criterion.
+
+### Bugfix diff audit
+Verify each of the following:
+- **Reproduction test present** — the test named in the bug report exists in the diff and targets the correct layer (Vitest or Playwright).
+- **Fix matches root cause** — the diff touches the files listed in "Affected Files" and addresses the stated root cause.
+- **No scope creep** — the diff contains only the reproduction test and the targeted fix; no unrelated refactors, new features, or speculative changes.
+- **Broken-behavior tests updated** — if the bug report lists tests that were asserting wrong behavior, those updates appear in the diff with an explanatory comment.
+
+### For both branch types, also check:
+- Out-of-scope features snuck in
+- Violations of CLAUDE.md core rules (floats in chip math, stringly-typed events, `any` types, inline styles, `console.log` in client code, etc.)
+
+Produce a concise audit table: criterion / check → status → notes.
 
 ---
 
@@ -56,13 +82,13 @@ For each gap found in Phase 2 or failing test from Phase 3, classify it:
 
 Apply all small fixes, then re-run the test suite to confirm green. If a fix causes unexpected failures, revert it and classify the item as large.
 
-After fixes, re-audit the acceptance criteria against the updated diff.
+After fixes, re-audit the criteria/checks against the updated diff.
 
 ---
 
 ## Phase 5: Report
 
-Present a structured summary to the user:
+### Issue report
 
 ```
 ## Review: issue/<NN>-<slug>
@@ -86,6 +112,36 @@ Present a structured summary to the user:
   (or "None found")
 ```
 
+### Bugfix report
+
+```
+## Review: bugfix/<slug>
+
+### Bug
+<confirmed one-sentence description from report>
+
+### Diff Checks
+| Check | Status |
+|-------|--------|
+| Reproduction test present | ✅ / ❌ |
+| Fix matches root cause     | ✅ / ⚠️ partial / ❌ |
+| No scope creep             | ✅ / ❌ |
+| Broken-behavior tests updated | ✅ / N/A / ❌ |
+
+### Tests
+- Unit suite: <pass>/<total> passing
+- E2E suite: <pass>/<total> passing (or "not run — no UI changes in diff")
+- Fixes applied: <list or "none">
+
+### Outstanding (needs your attention)
+- <item> — reason it was not auto-fixed
+  (or "None — all checks passed")
+
+### Rule Violations
+- <item> — rule from CLAUDE.md
+  (or "None found")
+```
+
 If there are outstanding large gaps or rule violations, stop here and ask the user how to proceed. Do not offer to merge.
 
 ---
@@ -93,11 +149,12 @@ If there are outstanding large gaps or rule violations, stop here and ask the us
 ## Phase 6: Merge Confirmation
 
 Only reach this phase when:
-- All acceptance criteria are **Covered**
+- All acceptance criteria / diff checks are **Covered / passing**
 - The test suite is fully green
 - No rule violations remain
 - No large gaps are outstanding
 
+### Issue merge
 Ask the user exactly:
 
 > All acceptance criteria are met and tests are green. Ready to merge `issue/<NN>-<slug>` into `main`? (yes / no)
@@ -108,4 +165,16 @@ If the user says **yes**:
 3. Confirm the merge succeeded and report the resulting commit hash.
 4. Update the issue file `status` to `done` if it is not already, and commit that change to `main`.
 
+### Bugfix merge
+Ask the user exactly:
+
+> All checks passed and tests are green. Ready to merge `bugfix/<slug>` into `main`? (yes / no)
+
+If the user says **yes**:
+1. `git checkout main`
+2. `git merge --no-ff bugfix/<slug>` — always use `--no-ff` to preserve branch history.
+3. Confirm the merge succeeded and report the resulting commit hash.
+4. Update the bug report's `> **Status:**` line to `merged` and commit that change to `main`.
+
+### Both
 If the user says **no**: stop. Do not merge, do not rebase, do not delete the branch.

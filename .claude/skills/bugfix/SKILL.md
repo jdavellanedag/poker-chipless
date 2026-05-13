@@ -100,7 +100,7 @@ Run both suites one final time and confirm all green:
 
 ## Phase 5: Done
 
-Report:
+Report to the user:
 
 ```
 ## Bugfix: <slug>
@@ -117,3 +117,46 @@ Report:
 ```
 
 Leave the branch open — do not merge. The user will run `/review` when ready.
+
+---
+
+## Phase 6: Write Bug Report
+
+Persist the bugfix context for future review. Determine the active feature slug by listing `.scratch/*/` directories and picking the one that matches the current work. Then write the report:
+
+**Path:** `.scratch/<feature-slug>/bugs/<branch-slug>.md`
+
+The file must use this structure exactly:
+
+```markdown
+# Bug: <human-readable title>
+
+> **Branch:** `bugfix/<slug>`
+> **Status:** fixed
+
+## Description
+
+<2–4 sentences describing what the user observed, what was expected, and under what conditions the bug occurred.>
+
+## Root Cause
+
+<Precise description of what in the code was wrong — file name, function/handler, and the specific incorrect behavior. One short paragraph.>
+
+## Fix
+
+<What was changed and why. Include file names. One short paragraph.>
+
+## Tests
+
+### Added
+- `<test name>` — `<file path>` — <one-line description of what it asserts>
+
+### Updated (were asserting wrong behavior)
+- `<test name>` — `<file path>` — <one-line description of what changed and why>
+  *(or "None" if no existing tests needed updating)*
+
+## Affected Files
+- `<file path>` — <what changed>
+```
+
+After writing the file, tell the user the path.
