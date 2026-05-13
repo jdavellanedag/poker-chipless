@@ -37,6 +37,75 @@ async function startHandWith2Players(browser: Browser) {
   return { hostCtx, hostPage, bobCtx, bobPage };
 }
 
+test.describe('Fold during a hand', () => {
+  test('active player folds: pot awarded to winner, action buttons gone for both', async ({ browser }) => {
+    // Heads-up: Alice(host)=SB/button acts first. She folds → Bob wins the pot (30).
+    const { hostCtx, hostPage, bobCtx, bobPage } = await startHandWith2Players(browser);
+
+    // Alice is active — she folds
+    await hostPage.getByTestId('btn-fold').click();
+
+    // Pot awarded to Bob: pot shows 0.
+    // Bob posted BB(20) → 980, wins pot(30) → 1010.
+    await expect(hostPage.getByTestId('pot')).toHaveText('0');
+    await expect(hostPage.getByTestId('chips-Bob')).toHaveText('1010');
+    await expect(bobPage.getByTestId('pot')).toHaveText('0');
+    await expect(bobPage.getByTestId('chips-Bob')).toHaveText('1010');
+
+    // Action buttons must not be visible for either player
+    await expect(hostPage.getByTestId('action-buttons')).not.toBeVisible();
+    await expect(bobPage.getByTestId('action-buttons')).not.toBeVisible();
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+});
+
+test.describe('Call during a hand', () => {
+  test('SB calls BB: chip counts and pot update, turn advances to BB', async ({ browser }) => {
+    // Heads-up: Alice(SB/button)=active, posts 10. Bob(BB) posts 20. Pot=30.
+    // Alice calls 10 more → Alice.chips=990, pot=40. Turn advances to Bob.
+    const { hostCtx, hostPage, bobCtx, bobPage } = await startHandWith2Players(browser);
+
+    await hostPage.getByTestId('btn-call').click();
+
+    // Alice's chips reduced by the 10 call amount (she already posted SB=10, now calls 10 more)
+    await expect(hostPage.getByTestId('chips-Alice')).toHaveText('990');
+    // Pot grows from 30 to 40
+    await expect(hostPage.getByTestId('pot')).toHaveText('40');
+    // Bob is now the active player — he sees action buttons
+    await expect(bobPage.getByTestId('action-buttons')).toBeVisible();
+    // Alice is no longer active — her action buttons are gone
+    await expect(hostPage.getByTestId('action-buttons')).not.toBeVisible();
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+});
+
+test.describe('Check during a hand', () => {
+  test('BB checks after SB calls: roundComplete hides action buttons for both', async ({ browser }) => {
+    // Alice(SB) calls 10 → Bob(BB) can check (both at 20, no open bet).
+    // After Bob checks: roundComplete=true → action-buttons hidden for both.
+    const { hostCtx, hostPage, bobCtx, bobPage } = await startHandWith2Players(browser);
+
+    // Alice (SB/host) calls to match Bob's BB
+    await hostPage.getByTestId('btn-call').click();
+    // Wait for Bob's action buttons to appear (turn advanced)
+    await expect(bobPage.getByTestId('action-buttons')).toBeVisible();
+
+    // Bob (BB) checks — this completes the betting round
+    await bobPage.getByTestId('btn-check').click();
+
+    // roundComplete=true → neither player should see action buttons
+    await expect(hostPage.getByTestId('action-buttons')).not.toBeVisible();
+    await expect(bobPage.getByTestId('action-buttons')).not.toBeVisible();
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+});
+
 test.describe('Player action buttons', () => {
   test('action buttons are visible only to the active player', async ({ browser }) => {
     // Heads-up: Alice=SB/button acts first preflop, Bob=BB
