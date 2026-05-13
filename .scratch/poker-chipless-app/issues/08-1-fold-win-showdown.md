@@ -1,10 +1,10 @@
 ---
-status: pending
+status: in-progress
 ---
 
 # Fold-Win Showdown Confirmation
 
-> **Status:** `pending`
+> **Status:** `in-progress`
 
 ## Clarification
 _No open questions. Fully designed via interview after issue 08 review._
