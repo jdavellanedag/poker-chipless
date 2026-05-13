@@ -1,10 +1,10 @@
 ---
-status: in-progress
+status: done
 ---
 
 # Scrollable Player List in Game Screen
 
-> **Status:** `in-progress`
+> **Status:** `done`
 
 ## Clarification
 

@@ -451,11 +451,16 @@ function GameScreen({
     : state.currentBet + state.lastRaiseSize;
   const [betInput, setBetInput] = useState(String(minBetOrRaise));
   const [hostPanelOpen, setHostPanelOpen] = useState(false);
+  const activePlayerRef = useRef<HTMLLIElement>(null);
 
   // Reset input to new minimum whenever the active player changes or minimum shifts
   useEffect(() => {
     setBetInput(String(minBetOrRaise));
   }, [state.activePlayerIndex, minBetOrRaise]);
+
+  useEffect(() => {
+    activePlayerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [state.activePlayerIndex]);
 
   const parsedBet = parseInt(betInput, 10);
   const betInputValid = !isNaN(parsedBet) && parsedBet > 0 && parsedBet === Math.floor(parsedBet);
@@ -485,159 +490,176 @@ function GameScreen({
   const hostDisconnected = hostPlayer ? !hostPlayer.isConnected : false;
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div className="h-screen flex flex-col bg-slate-900">
+      {/* Pause banner — first child so it compresses flex-1 rather than overflowing */}
       {!isHost && isPaused && (
-        <div data-testid="pause-banner" className="bg-yellow-600 text-white text-center py-2 px-4 font-semibold text-sm">
+        <div data-testid="pause-banner" className="shrink-0 bg-yellow-600 text-white text-center py-2 px-4 font-semibold text-sm">
           {hostDisconnected ? 'Waiting for host to reconnect…' : 'Game paused by host'}
         </div>
       )}
-      <div className={`p-4 transition-opacity ${!isHost && isPaused ? 'opacity-50' : ''} ${isHost ? 'md:mr-72' : ''}`}>
-        <div className="max-w-sm mx-auto pt-8">
-          <div className="text-center mb-6">
-            <p className="text-slate-400 text-xs uppercase tracking-wide mb-1">Pot</p>
-            <p data-testid="pot" className="text-3xl font-bold text-white">{state.pot}</p>
-            <p data-testid="round-label" className="text-slate-500 text-xs mt-1 uppercase tracking-wide">{state.round}</p>
-          </div>
 
-          <ul className="space-y-2 mb-6">
-            {state.players.map((p, i) => {
-              const isButton = i === state.dealerButtonIndex;
-              const isActive = i === state.activePlayerIndex;
-              const isSB = i === sbIdx;
-              const isBB = i === bbIdx;
-              return (
-                <li
-                  key={p.id}
-                  data-testid={`player-row-${p.displayName}`}
-                  className={`flex justify-between items-center rounded-lg px-4 py-3 ${isActive ? 'bg-slate-700 ring-1 ring-emerald-500' : 'bg-slate-800'}`}
-                >
-                  <span className="flex items-center gap-2">
-                    {isButton && (
-                      <span className="text-xs bg-yellow-600 text-yellow-100 px-1.5 py-0.5 rounded-full font-mono">D</span>
-                    )}
-                    {isSB && (
-                      <span data-testid={`badge-sb-${p.displayName}`} className="text-xs bg-blue-700 text-blue-100 px-1.5 py-0.5 rounded-full font-mono">SB</span>
-                    )}
-                    {isBB && (
-                      <span data-testid={`badge-bb-${p.displayName}`} className="text-xs bg-violet-700 text-violet-100 px-1.5 py-0.5 rounded-full font-mono">BB</span>
-                    )}
-                    {p.isEliminated && (
-                      <span data-testid={`badge-eliminated-${p.displayName}`} className="text-xs bg-red-900 text-red-300 px-1.5 py-0.5 rounded-full font-mono">Eliminated</span>
-                    )}
-                    {!p.isConnected && (
-                      <span
-                        data-testid={`disconnected-indicator-${p.displayName}`}
-                        className="w-2 h-2 rounded-full bg-slate-500 shrink-0"
-                        aria-label="disconnected"
-                      />
-                    )}
-                    <span className={p.id === myPlayerId ? 'text-emerald-400 font-semibold' : p.isFolded ? 'text-slate-600 line-through' : !p.isConnected ? 'text-slate-500' : 'text-white'}>
-                      {p.displayName}
-                    </span>
-                  </span>
-                  <span className="flex items-center gap-3">
-                    {p.currentBet > 0 && (
-                      <span className="text-yellow-400 font-mono text-sm">{p.currentBet}</span>
-                    )}
-                    <span data-testid={`chips-${p.displayName}`} className="text-slate-300 font-mono">{p.chipCount}</span>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+      {/* Content column — takes all remaining height, no overflow on itself */}
+      <div className={`flex flex-col flex-1 overflow-hidden transition-opacity ${!isHost && isPaused ? 'opacity-50' : ''} ${isHost ? 'md:mr-72' : ''}`}>
 
-          {isMyTurn && !state.roundComplete && state.phase !== 'showdown' && !isPaused && (
-            <div data-testid="action-buttons" className="space-y-2 mb-4">
-              <div className="flex gap-2">
-                <button
-                  data-testid="btn-fold"
-                  onClick={onFold}
-                  className="flex-1 bg-red-700 hover:bg-red-600 text-white font-semibold py-3 rounded"
-                >
-                  Fold
-                </button>
-                {canCheck && (
-                  <button
-                    data-testid="btn-check"
-                    onClick={onCheck}
-                    className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-semibold py-3 rounded"
-                  >
-                    Check
-                  </button>
-                )}
-                {canCall && (
-                  <button
-                    data-testid="btn-call"
-                    onClick={onCall}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded"
-                  >
-                    Call {callAmount}
-                  </button>
-                )}
-                <button
-                  data-testid="btn-allin"
-                  onClick={onAllin}
-                  className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white font-semibold py-3 rounded"
-                >
-                  All-In ({me?.chipCount ?? 0})
-                </button>
-              </div>
-              {state.currentBet === 0 ? (
-                <div className="flex gap-2">
-                  <input
-                    data-testid="bet-input"
-                    type="number"
-                    min={state.bigBlind}
-                    step={1}
-                    value={betInput}
-                    onChange={(e) => setBetInput(e.target.value)}
-                    className="flex-1 bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    data-testid="btn-bet"
-                    onClick={() => { if (canBet) onBet(parsedBet); }}
-                    disabled={!canBet}
-                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded disabled:opacity-40"
-                  >
-                    Bet {betInputValid ? parsedBet : ''}
-                  </button>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <input
-                    data-testid="raise-input"
-                    type="number"
-                    min={minBetOrRaise}
-                    step={1}
-                    value={betInput}
-                    onChange={(e) => setBetInput(e.target.value)}
-                    className="flex-1 bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    data-testid="btn-raise"
-                    onClick={() => { if (canRaise) onRaise(parsedBet); }}
-                    disabled={!canRaise}
-                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded disabled:opacity-40"
-                  >
-                    Raise to {betInputValid ? parsedBet : ''}
-                  </button>
-                </div>
-              )}
+        {/* Top: pot + round label — always visible */}
+        <div className="shrink-0 px-4 pt-4">
+          <div className="max-w-sm mx-auto">
+            <div className="text-center mb-3">
+              <p className="text-slate-400 text-xs uppercase tracking-wide mb-1">Pot</p>
+              <p data-testid="pot" className="text-3xl font-bold text-white">{state.pot}</p>
+              <p data-testid="round-label" className="text-slate-500 text-xs mt-1 uppercase tracking-wide">{state.round}</p>
             </div>
-          )}
+          </div>
+        </div>
 
-          {/* Mobile toggle — only shown when panel is closed */}
-          {isHost && !hostPanelOpen && (
-            <button
-              data-testid="host-panel-toggle"
-              onClick={() => setHostPanelOpen(true)}
-              className="md:hidden w-full bg-slate-700 text-slate-300 py-3 rounded-lg text-sm my-2"
-            >
-              ▲ Host Controls
-            </button>
-          )}
+        {/* Middle: scrollable player list */}
+        <div className="flex-1 overflow-y-auto px-4">
+          <div className="max-w-sm mx-auto">
+            <ul className="space-y-2 py-2">
+              {state.players.map((p, i) => {
+                const isButton = i === state.dealerButtonIndex;
+                const isActive = i === state.activePlayerIndex;
+                const isSB = i === sbIdx;
+                const isBB = i === bbIdx;
+                return (
+                  <li
+                    key={p.id}
+                    ref={isActive ? activePlayerRef : null}
+                    data-testid={`player-row-${p.displayName}`}
+                    className={`flex justify-between items-center rounded-lg px-4 py-3 ${isActive ? 'bg-slate-700 ring-1 ring-emerald-500' : 'bg-slate-800'}`}
+                  >
+                    <span className="flex items-center gap-2">
+                      {isButton && (
+                        <span className="text-xs bg-yellow-600 text-yellow-100 px-1.5 py-0.5 rounded-full font-mono">D</span>
+                      )}
+                      {isSB && (
+                        <span data-testid={`badge-sb-${p.displayName}`} className="text-xs bg-blue-700 text-blue-100 px-1.5 py-0.5 rounded-full font-mono">SB</span>
+                      )}
+                      {isBB && (
+                        <span data-testid={`badge-bb-${p.displayName}`} className="text-xs bg-violet-700 text-violet-100 px-1.5 py-0.5 rounded-full font-mono">BB</span>
+                      )}
+                      {p.isEliminated && (
+                        <span data-testid={`badge-eliminated-${p.displayName}`} className="text-xs bg-red-900 text-red-300 px-1.5 py-0.5 rounded-full font-mono">Eliminated</span>
+                      )}
+                      {!p.isConnected && (
+                        <span
+                          data-testid={`disconnected-indicator-${p.displayName}`}
+                          className="w-2 h-2 rounded-full bg-slate-500 shrink-0"
+                          aria-label="disconnected"
+                        />
+                      )}
+                      <span className={p.id === myPlayerId ? 'text-emerald-400 font-semibold' : p.isFolded ? 'text-slate-600 line-through' : !p.isConnected ? 'text-slate-500' : 'text-white'}>
+                        {p.displayName}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-3">
+                      {p.currentBet > 0 && (
+                        <span className="text-yellow-400 font-mono text-sm">{p.currentBet}</span>
+                      )}
+                      <span data-testid={`chips-${p.displayName}`} className="text-slate-300 font-mono">{p.chipCount}</span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
 
-          <ActionLog entries={state.log} />
+        {/* Bottom: action buttons + mobile host-controls toggle + action log — always visible */}
+        <div className="shrink-0 px-4 pb-4">
+          <div className="max-w-sm mx-auto">
+            {isMyTurn && !state.roundComplete && state.phase !== 'showdown' && !isPaused && (
+              <div data-testid="action-buttons" className="space-y-2 mb-4">
+                <div className="flex gap-2">
+                  <button
+                    data-testid="btn-fold"
+                    onClick={onFold}
+                    className="flex-1 bg-red-700 hover:bg-red-600 text-white font-semibold py-3 rounded"
+                  >
+                    Fold
+                  </button>
+                  {canCheck && (
+                    <button
+                      data-testid="btn-check"
+                      onClick={onCheck}
+                      className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-semibold py-3 rounded"
+                    >
+                      Check
+                    </button>
+                  )}
+                  {canCall && (
+                    <button
+                      data-testid="btn-call"
+                      onClick={onCall}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded"
+                    >
+                      Call {callAmount}
+                    </button>
+                  )}
+                  <button
+                    data-testid="btn-allin"
+                    onClick={onAllin}
+                    className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white font-semibold py-3 rounded"
+                  >
+                    All-In ({me?.chipCount ?? 0})
+                  </button>
+                </div>
+                {state.currentBet === 0 ? (
+                  <div className="flex gap-2">
+                    <input
+                      data-testid="bet-input"
+                      type="number"
+                      min={state.bigBlind}
+                      step={1}
+                      value={betInput}
+                      onChange={(e) => setBetInput(e.target.value)}
+                      className="flex-1 bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      data-testid="btn-bet"
+                      onClick={() => { if (canBet) onBet(parsedBet); }}
+                      disabled={!canBet}
+                      className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded disabled:opacity-40"
+                    >
+                      Bet {betInputValid ? parsedBet : ''}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      data-testid="raise-input"
+                      type="number"
+                      min={minBetOrRaise}
+                      step={1}
+                      value={betInput}
+                      onChange={(e) => setBetInput(e.target.value)}
+                      className="flex-1 bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      data-testid="btn-raise"
+                      onClick={() => { if (canRaise) onRaise(parsedBet); }}
+                      disabled={!canRaise}
+                      className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded disabled:opacity-40"
+                    >
+                      Raise to {betInputValid ? parsedBet : ''}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isHost && !hostPanelOpen && (
+              <button
+                data-testid="host-panel-toggle"
+                onClick={() => setHostPanelOpen(true)}
+                className="md:hidden w-full bg-slate-700 text-slate-300 py-3 rounded-lg text-sm my-2"
+              >
+                ▲ Host Controls
+              </button>
+            )}
+
+            <ActionLog entries={state.log} />
+          </div>
         </div>
       </div>
 
