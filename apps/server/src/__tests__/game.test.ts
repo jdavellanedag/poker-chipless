@@ -329,41 +329,52 @@ describe('fold-win roundComplete', () => {
 });
 
 describe('last player standing', () => {
-  it('awards pot to last remaining player, keeps phase active, and allows newHand', () => {
-    // Heads-up: Alice(0)=button/SB acts first. Alice folds → Bob wins.
+  it('fold() sets phase showdown, round showdown, pot intact, and logs win message when last player stands', () => {
+    // Heads-up: Alice(0)=button/SB acts first. Alice folds → Bob is last standing.
+    const hand = makeHand(['Alice', 'Bob']);
+    const potBeforeFold = hand.pot;
+
+    const result = fold(hand, hand.players[0].id);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.phase).toBe('showdown');
+    expect(result.state.round).toBe('showdown');
+    expect(result.state.pot).toBe(potBeforeFold);
+    expect(result.state.log.map((e) => e.message)).toContain(
+      `Bob wins ${potBeforeFold} (everyone else folded)`,
+    );
+  });
+
+  it('enters showdown phase with pot intact in heads-up when active player folds', () => {
+    // Heads-up: Alice(0)=button/SB acts first. Alice folds → phase: showdown, pot stays.
     const hand = makeHand(['Alice', 'Bob']);
     expect(hand.activePlayerIndex).toBe(0);
-    const potBeforeFold = hand.pot; // SB + BB already in pot
+    const potBeforeFold = hand.pot;
 
     const result = fold(hand, hand.players[0].id);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
+    expect(result.state.phase).toBe('showdown');
+    expect(result.state.round).toBe('showdown');
+    expect(result.state.pot).toBe(potBeforeFold);
     const bob = result.state.players.find((p) => p.displayName === 'Bob')!;
-    // phase stays active — host can immediately start a new hand
-    expect(result.state.phase).toBe('active');
-    // pot transferred to Bob
-    expect(result.state.pot).toBe(0);
-    expect(bob.chipCount).toBe(hand.players.find((p) => p.displayName === 'Bob')!.chipCount + potBeforeFold);
-    // log records the win
+    expect(bob.chipCount).toBe(hand.players.find((p) => p.displayName === 'Bob')!.chipCount);
     expect(result.state.log.map((e) => e.message)).toContain(
       `Bob wins ${potBeforeFold} (everyone else folded)`,
     );
-    // host can start a new hand without hitting "Game has already started"
-    const nextHand = newHand(result.state);
-    expect(nextHand.ok).toBe(true);
   });
 
-  it('awards pot to last remaining player in a 3-player hand when two fold', () => {
-    // Alice(0)=button/UTG, Bob(1)=SB, Carol(2)=BB. Alice folds first, then Bob folds.
+  it('enters showdown phase with pot intact in a 3-player hand when two fold', () => {
+    // Alice(0)=button/UTG, Bob(1)=SB, Carol(2)=BB. Alice folds first, then Bob folds → Carol is last.
     const hand = makeHand(['Alice', 'Bob', 'Carol']);
-    expect(hand.activePlayerIndex).toBe(0); // Alice (UTG) acts first
+    expect(hand.activePlayerIndex).toBe(0);
     const potBeforeFolds = hand.pot;
 
     const afterAliceFold = fold(hand, hand.players[0].id);
     expect(afterAliceFold.ok).toBe(true);
     if (!afterAliceFold.ok) return;
-    // Two still contesting (Bob + Carol) — hand continues
     expect(afterAliceFold.state.phase).toBe('active');
 
     const afterBobFold = fold(afterAliceFold.state, afterAliceFold.state.players[afterAliceFold.state.activePlayerIndex].id);
@@ -371,11 +382,13 @@ describe('last player standing', () => {
     if (!afterBobFold.ok) return;
 
     const carol = afterBobFold.state.players.find((p) => p.displayName === 'Carol')!;
-    expect(afterBobFold.state.phase).toBe('active');
-    expect(afterBobFold.state.pot).toBe(0);
-    expect(carol.chipCount).toBe(hand.players.find((p) => p.displayName === 'Carol')!.chipCount + potBeforeFolds);
-    const nextHand = newHand(afterBobFold.state);
-    expect(nextHand.ok).toBe(true);
+    expect(afterBobFold.state.phase).toBe('showdown');
+    expect(afterBobFold.state.round).toBe('showdown');
+    expect(afterBobFold.state.pot).toBe(potBeforeFolds);
+    expect(carol.chipCount).toBe(hand.players.find((p) => p.displayName === 'Carol')!.chipCount);
+    expect(afterBobFold.state.log.map((e) => e.message)).toContain(
+      `Carol wins ${potBeforeFolds} (everyone else folded)`,
+    );
   });
 });
 
@@ -785,6 +798,18 @@ describe('advanceRound', () => {
     expect(result.ok).toBe(false);
   });
 
+  it('river → showdown: sets both phase and round to showdown', () => {
+    const hand = makeHand(['Alice', 'Bob']);
+    const riverDone = { ...hand, round: 'river' as const, roundComplete: true, pot: 100 };
+
+    const result = advanceRound(riverDone);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.round).toBe('showdown');
+    expect(result.state.phase).toBe('showdown');
+  });
+
   it('rejects when round is already showdown', () => {
     const hand = makeHand(['Alice', 'Bob']);
     const result = advanceRound({ ...hand, round: 'showdown' });
@@ -795,7 +820,7 @@ describe('advanceRound', () => {
 describe('declareWinner', () => {
   it('transfers full pot to winner, resets pot to 0, and logs "Alice wins pot of 1200"', () => {
     const hand = makeHand(['Alice', 'Bob', 'Carol']);
-    const state = { ...hand, round: 'showdown' as const, pot: 1200 };
+    const state = { ...hand, phase: 'showdown' as const, round: 'showdown' as const, pot: 1200 };
     const alice = state.players[0];
 
     const result = declareWinner(state, alice.id);
@@ -812,6 +837,7 @@ describe('declareWinner', () => {
     const hand = makeHand(['Alice', 'Bob']);
     const state = {
       ...hand,
+      phase: 'showdown' as const,
       round: 'showdown' as const,
       pot: 500,
       players: hand.players.map((p) =>
@@ -832,7 +858,7 @@ describe('declareWinner', () => {
 
   it('rejects when playerId does not exist', () => {
     const hand = makeHand(['Alice', 'Bob']);
-    const result = declareWinner({ ...hand, pot: 100 }, 'non-existent-id');
+    const result = declareWinner({ ...hand, phase: 'showdown' as const, pot: 100 }, 'non-existent-id');
     expect(result.ok).toBe(false);
   });
 
@@ -840,6 +866,8 @@ describe('declareWinner', () => {
     const hand = makeHand(['Alice', 'Bob']);
     const state = {
       ...hand,
+      phase: 'showdown' as const,
+      round: 'showdown' as const,
       pot: 100,
       players: hand.players.map((p) =>
         p.displayName === 'Alice' ? { ...p, isEliminated: true } : p,
@@ -848,5 +876,25 @@ describe('declareWinner', () => {
     const alice = state.players.find((p) => p.displayName === 'Alice')!;
     const result = declareWinner(state, alice.id);
     expect(result.ok).toBe(false);
+  });
+
+  it('rejects when phase is not showdown', () => {
+    const hand = makeHand(['Alice', 'Bob']);
+    const state = { ...hand, phase: 'active' as const, pot: 100 };
+    const result = declareWinner(state, state.players[0].id);
+    expect(result.ok).toBe(false);
+  });
+
+  it('returns phase active after pot transfer so host can start a new hand', () => {
+    const hand = makeHand(['Alice', 'Bob']);
+    const state = { ...hand, phase: 'showdown' as const, round: 'showdown' as const, pot: 500 };
+    const alice = state.players.find((p) => p.displayName === 'Alice')!;
+
+    const result = declareWinner(state, alice.id);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.phase).toBe('active');
+    expect(result.state.pot).toBe(0);
   });
 });
