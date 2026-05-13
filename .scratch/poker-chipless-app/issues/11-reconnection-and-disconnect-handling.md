@@ -1,10 +1,10 @@
 ---
-status: pending
+status: in-progress
 ---
 
 # Reconnection & Disconnect Handling
 
-> **Status:** `pending`
+> **Status:** `in-progress`
 
 ## Clarification
 _No open questions._
