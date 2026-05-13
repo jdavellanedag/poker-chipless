@@ -6,7 +6,7 @@ import express from 'express';
 import { Server } from 'socket.io';
 import type { ServerToClientEvents, ClientToServerEvents, GameState, CreateAckResponse, JoinAckResponse } from '@poker-chipless/types';
 import { createSession, joinSession } from './session.js';
-import { startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin } from './game.js';
+import { startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, advanceRound, declareWinner } from './game.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -119,7 +119,40 @@ io.on('connection', (socket) => {
     if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
     const player = session.state.players.find((p) => p.id === playerId);
     if (!player?.isHost) { ack({ ok: false, error: 'Only the host can start a new hand.' }); return; }
+    const activePlayers = session.state.players.filter((p) => !p.isEliminated);
+    if (activePlayers.length < 2) {
+      session.state = { ...session.state, phase: 'ended' };
+      io.to(code!).emit('game:state', session.state);
+      ack({ ok: true });
+      return;
+    }
     const result = newHand(session.state);
+    if (!result.ok) { ack({ ok: false, error: result.error }); return; }
+    session.state = result.state;
+    io.to(code!).emit('game:state', session.state);
+    ack({ ok: true });
+  });
+
+  socket.on('host:advance-round', (_payload, ack) => {
+    const { code, playerId } = socket.data as { code?: string; playerId?: string };
+    const session = code ? sessions.get(code) : undefined;
+    if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
+    const player = session.state.players.find((p) => p.id === playerId);
+    if (!player?.isHost) { ack({ ok: false, error: 'Only the host can advance the round.' }); return; }
+    const result = advanceRound(session.state);
+    if (!result.ok) { ack({ ok: false, error: result.error }); return; }
+    session.state = result.state;
+    io.to(code!).emit('game:state', session.state);
+    ack({ ok: true });
+  });
+
+  socket.on('host:declare-winner', ({ playerId: winnerId }, ack) => {
+    const { code, playerId } = socket.data as { code?: string; playerId?: string };
+    const session = code ? sessions.get(code) : undefined;
+    if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
+    const player = session.state.players.find((p) => p.id === playerId);
+    if (!player?.isHost) { ack({ ok: false, error: 'Only the host can declare a winner.' }); return; }
+    const result = declareWinner(session.state, winnerId);
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);

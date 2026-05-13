@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createSession, joinSession } from '../session.js';
-import { startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, withValidActions } from '../game.js';
+import { startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, withValidActions, advanceRound, declareWinner } from '../game.js';
 
 function makelobby(playerNames: string[]) {
   const [host, ...rest] = playerNames;
@@ -719,5 +719,134 @@ describe('bet', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.state.activePlayerIndex).toBe(1); // Bob is next
+  });
+});
+
+describe('advanceRound', () => {
+  it('preflop → flop: round transitions, per-round state resets, logs "--- Flop ---"', () => {
+    const hand = makeHand(['Alice', 'Bob', 'Carol']);
+    const preflopDone = {
+      ...hand,
+      roundComplete: true,
+      currentBet: 40,
+      lastRaiseSize: 20,
+      players: hand.players.map((p) => ({ ...p, currentBet: 40, hasActedThisRound: true })),
+    };
+
+    const result = advanceRound(preflopDone);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const s = result.state;
+    expect(s.round).toBe('flop');
+    expect(s.currentBet).toBe(0);
+    expect(s.lastRaiseSize).toBe(hand.bigBlind);
+    expect(s.roundComplete).toBe(false);
+    expect(s.players.every((p) => p.currentBet === 0)).toBe(true);
+    expect(s.players.every((p) => p.hasActedThisRound === false || p.isFolded || p.isEliminated)).toBe(true);
+    expect(s.log.map((e) => e.message)).toContain('--- Flop ---');
+  });
+
+  it('advances through full sequence: flop → turn → river → showdown', () => {
+    const base = { ...makeHand(['Alice', 'Bob']), roundComplete: true };
+    const rounds = ['preflop', 'flop', 'turn', 'river'] as const;
+    const expected = ['flop', 'turn', 'river', 'showdown'] as const;
+    let state = base;
+    for (let i = 0; i < rounds.length; i++) {
+      state = { ...state, round: rounds[i] };
+      const result = advanceRound(state);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.state.round).toBe(expected[i]);
+      state = result.state;
+    }
+  });
+
+  it('sets activePlayerIndex to first non-folded non-eliminated player clockwise of button', () => {
+    // 4-player: button=0 (Alice), Bob(1)=folded. First active clockwise = Carol(2).
+    const hand = makeHand(['Alice', 'Bob', 'Carol', 'Dave']);
+    const state = {
+      ...hand,
+      dealerButtonIndex: 0,
+      roundComplete: true,
+      players: hand.players.map((p, i) => ({ ...p, isFolded: i === 1 })), // Bob folded
+    };
+
+    const result = advanceRound(state);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.activePlayerIndex).toBe(2); // Carol, skipping Bob
+  });
+
+  it('rejects when phase is not active', () => {
+    const hand = makeHand(['Alice', 'Bob']);
+    const result = advanceRound({ ...hand, phase: 'ended' });
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects when round is already showdown', () => {
+    const hand = makeHand(['Alice', 'Bob']);
+    const result = advanceRound({ ...hand, round: 'showdown' });
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('declareWinner', () => {
+  it('transfers full pot to winner, resets pot to 0, and logs "Alice wins pot of 1200"', () => {
+    const hand = makeHand(['Alice', 'Bob', 'Carol']);
+    const state = { ...hand, round: 'showdown' as const, pot: 1200 };
+    const alice = state.players[0];
+
+    const result = declareWinner(state, alice.id);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.pot).toBe(0);
+    expect(result.state.players[0].chipCount).toBe(alice.chipCount + 1200);
+    expect(result.state.log.map((e) => e.message)).toContain('Alice wins pot of 1200');
+  });
+
+  it('marks players with chipCount === 0 after pot transfer as isEliminated', () => {
+    // Bob has 0 chips (went all-in and lost). After pot goes to Alice, Bob is eliminated.
+    const hand = makeHand(['Alice', 'Bob']);
+    const state = {
+      ...hand,
+      round: 'showdown' as const,
+      pot: 500,
+      players: hand.players.map((p) =>
+        p.displayName === 'Bob' ? { ...p, chipCount: 0 } : p,
+      ),
+    };
+    const alice = state.players.find((p) => p.displayName === 'Alice')!;
+
+    const result = declareWinner(state, alice.id);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const bob = result.state.players.find((p) => p.displayName === 'Bob')!;
+    expect(bob.isEliminated).toBe(true);
+    const aliceAfter = result.state.players.find((p) => p.displayName === 'Alice')!;
+    expect(aliceAfter.isEliminated).toBe(false);
+  });
+
+  it('rejects when playerId does not exist', () => {
+    const hand = makeHand(['Alice', 'Bob']);
+    const result = declareWinner({ ...hand, pot: 100 }, 'non-existent-id');
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects when player is eliminated', () => {
+    const hand = makeHand(['Alice', 'Bob']);
+    const state = {
+      ...hand,
+      pot: 100,
+      players: hand.players.map((p) =>
+        p.displayName === 'Alice' ? { ...p, isEliminated: true } : p,
+      ),
+    };
+    const alice = state.players.find((p) => p.displayName === 'Alice')!;
+    const result = declareWinner(state, alice.id);
+    expect(result.ok).toBe(false);
   });
 });

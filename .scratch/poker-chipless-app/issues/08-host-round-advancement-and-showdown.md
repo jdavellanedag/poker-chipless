@@ -1,10 +1,10 @@
 ---
-status: pending
+status: done
 ---
 
 # Host Round Advancement & Showdown
 
-> **Status:** `pending`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._

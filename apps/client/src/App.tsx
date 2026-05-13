@@ -81,6 +81,14 @@ export default function App() {
     socket.emit('host:new-hand', {}, () => {});
   }
 
+  function handleAdvanceRound() {
+    socket.emit('host:advance-round', {}, () => {});
+  }
+
+  function handleDeclareWinner(winnerId: string) {
+    socket.emit('host:declare-winner', { playerId: winnerId }, () => {});
+  }
+
   function handleFold() {
     socket.emit('action:fold', {}, () => {});
   }
@@ -106,12 +114,28 @@ export default function App() {
   }
 
   if (gameState) {
+    if (gameState.phase === 'ended') {
+      return (
+        <CenteredCard>
+          <h1 className="text-2xl font-bold text-white mb-4">Game Over</h1>
+          <ul className="space-y-2">
+            {gameState.players.filter((p) => !p.isEliminated).map((p) => (
+              <li key={p.id} className="text-emerald-400 font-semibold text-lg text-center">
+                {p.displayName} — {p.chipCount} chips
+              </li>
+            ))}
+          </ul>
+        </CenteredCard>
+      );
+    }
     if (gameState.phase === 'active') {
       return (
         <GameScreen
           state={gameState}
           myPlayerId={myPlayerId}
           onNewHand={handleNewHand}
+          onAdvanceRound={handleAdvanceRound}
+          onDeclareWinner={handleDeclareWinner}
           onFold={handleFold}
           onCheck={handleCheck}
           onCall={handleCall}
@@ -368,6 +392,8 @@ function GameScreen({
   state,
   myPlayerId,
   onNewHand,
+  onAdvanceRound,
+  onDeclareWinner,
   onFold,
   onCheck,
   onCall,
@@ -378,6 +404,8 @@ function GameScreen({
   state: GameState;
   myPlayerId: string;
   onNewHand: () => void;
+  onAdvanceRound: () => void;
+  onDeclareWinner: (playerId: string) => void;
   onFold: () => void;
   onCheck: () => void;
   onCall: () => void;
@@ -550,7 +578,7 @@ function GameScreen({
           </div>
         )}
 
-        {isHost && (
+        {isHost && state.pot === 0 && (
           <button
             data-testid="new-hand-btn"
             onClick={onNewHand}
@@ -559,7 +587,57 @@ function GameScreen({
             New Hand
           </button>
         )}
+
+        {isHost && state.round === 'showdown' && state.pot > 0 && (
+          <DeclareWinnerPanel state={state} onDeclareWinner={onDeclareWinner} />
+        )}
+
+        {isHost && state.roundComplete && state.round !== 'showdown' && state.pot > 0 && (
+          <button
+            data-testid="advance-round-btn"
+            onClick={onAdvanceRound}
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded"
+          >
+            Advance Round
+          </button>
+        )}
       </div>
+    </div>
+  );
+}
+
+function DeclareWinnerPanel({
+  state,
+  onDeclareWinner,
+}: {
+  state: GameState;
+  onDeclareWinner: (playerId: string) => void;
+}) {
+  const eligible = state.players.filter((p) => !p.isEliminated && !p.isFolded);
+  const [selectedId, setSelectedId] = useState(eligible[0]?.id ?? '');
+
+  return (
+    <div data-testid="declare-winner-panel" className="space-y-2">
+      <select
+        data-testid="winner-select"
+        value={selectedId}
+        onChange={(e) => setSelectedId(e.target.value)}
+        className="w-full bg-slate-700 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+      >
+        {eligible.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.displayName} ({p.chipCount} chips)
+          </option>
+        ))}
+      </select>
+      <button
+        data-testid="declare-winner-btn"
+        onClick={() => { if (selectedId) onDeclareWinner(selectedId); }}
+        disabled={!selectedId}
+        className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-semibold py-2 rounded disabled:opacity-40"
+      >
+        Declare Winner
+      </button>
     </div>
   );
 }
