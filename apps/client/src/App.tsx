@@ -450,6 +450,7 @@ function GameScreen({
     ? state.bigBlind
     : state.currentBet + state.lastRaiseSize;
   const [betInput, setBetInput] = useState(String(minBetOrRaise));
+  const [hostPanelOpen, setHostPanelOpen] = useState(false);
 
   // Reset input to new minimum whenever the active player changes or minimum shifts
   useEffect(() => {
@@ -523,7 +524,14 @@ function GameScreen({
                     {p.isEliminated && (
                       <span data-testid={`badge-eliminated-${p.displayName}`} className="text-xs bg-red-900 text-red-300 px-1.5 py-0.5 rounded-full font-mono">Eliminated</span>
                     )}
-                    <span className={p.id === myPlayerId ? 'text-emerald-400 font-semibold' : p.isFolded ? 'text-slate-600 line-through' : 'text-white'}>
+                    {!p.isConnected && (
+                      <span
+                        data-testid={`disconnected-indicator-${p.displayName}`}
+                        className="w-2 h-2 rounded-full bg-slate-500 shrink-0"
+                        aria-label="disconnected"
+                      />
+                    )}
+                    <span className={p.id === myPlayerId ? 'text-emerald-400 font-semibold' : p.isFolded ? 'text-slate-600 line-through' : !p.isConnected ? 'text-slate-500' : 'text-white'}>
                       {p.displayName}
                     </span>
                   </span>
@@ -544,7 +552,7 @@ function GameScreen({
                 <button
                   data-testid="btn-fold"
                   onClick={onFold}
-                  className="flex-1 bg-red-700 hover:bg-red-600 text-white font-semibold py-2 rounded"
+                  className="flex-1 bg-red-700 hover:bg-red-600 text-white font-semibold py-3 rounded"
                 >
                   Fold
                 </button>
@@ -552,7 +560,7 @@ function GameScreen({
                   <button
                     data-testid="btn-check"
                     onClick={onCheck}
-                    className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-semibold py-2 rounded"
+                    className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-semibold py-3 rounded"
                   >
                     Check
                   </button>
@@ -561,7 +569,7 @@ function GameScreen({
                   <button
                     data-testid="btn-call"
                     onClick={onCall}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded"
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded"
                   >
                     Call {callAmount}
                   </button>
@@ -569,7 +577,7 @@ function GameScreen({
                 <button
                   data-testid="btn-allin"
                   onClick={onAllin}
-                  className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white font-semibold py-2 rounded"
+                  className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white font-semibold py-3 rounded"
                 >
                   All-In ({me?.chipCount ?? 0})
                 </button>
@@ -589,7 +597,7 @@ function GameScreen({
                     data-testid="btn-bet"
                     onClick={() => { if (canBet) onBet(parsedBet); }}
                     disabled={!canBet}
-                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded disabled:opacity-40"
+                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded disabled:opacity-40"
                   >
                     Bet {betInputValid ? parsedBet : ''}
                   </button>
@@ -609,7 +617,7 @@ function GameScreen({
                     data-testid="btn-raise"
                     onClick={() => { if (canRaise) onRaise(parsedBet); }}
                     disabled={!canRaise}
-                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded disabled:opacity-40"
+                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded disabled:opacity-40"
                   >
                     Raise to {betInputValid ? parsedBet : ''}
                   </button>
@@ -619,15 +627,29 @@ function GameScreen({
           )}
 
           {isHost && (
-            <HostPanel
-              state={state}
-              onNewHand={onNewHand}
-              onAdvanceRound={onAdvanceRound}
-              onDeclareWinner={onDeclareWinner}
-              onPause={onPause}
-              onResume={onResume}
-              onRebuy={onRebuy}
-            />
+            <button
+              data-testid="host-panel-toggle"
+              onClick={() => setHostPanelOpen(!hostPanelOpen)}
+              className="md:hidden w-full bg-slate-700 text-slate-300 py-3 rounded-lg text-sm my-2"
+            >
+              {hostPanelOpen ? '▼ Hide Controls' : '▲ Host Controls'}
+            </button>
+          )}
+          {isHost && (
+            <div
+              data-testid="host-panel"
+              className={hostPanelOpen ? 'block' : 'hidden md:block'}
+            >
+              <HostPanel
+                state={state}
+                onNewHand={onNewHand}
+                onAdvanceRound={onAdvanceRound}
+                onDeclareWinner={onDeclareWinner}
+                onPause={onPause}
+                onResume={onResume}
+                onRebuy={onRebuy}
+              />
+            </div>
           )}
 
           <ActionLog entries={state.log} />
