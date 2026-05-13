@@ -1,10 +1,10 @@
 ---
-status: pending
+status: done
 ---
 
 # Scrollable Player List in Game Screen
 
-> **Status:** `pending`
+> **Status:** `done`
 
 ## Clarification
 
