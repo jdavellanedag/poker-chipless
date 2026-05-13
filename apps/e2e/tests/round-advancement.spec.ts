@@ -240,6 +240,50 @@ test.describe('Declare Winner at showdown', () => {
   });
 });
 
+test.describe('Fold-win showdown', () => {
+  test('last fold enters showdown phase: Accept button appears, pot transfers on click, New Hand follows', async ({ browser }) => {
+    // Heads-up: Alice(host)=SB/button, Bob=BB.
+    // Alice folds → showdown entered with pot intact → host sees Accept button.
+    // Host clicks Accept → Bob wins pot → New Hand button appears.
+    const { ctx: hostCtx, page: hostPage, code } = await createSession(browser, 'Alice');
+    const { ctx: bobCtx, page: bobPage } = await joinSession(browser, code, 'Bob');
+
+    await hostPage.getByLabel(/starting stack/i).fill('1000');
+    await hostPage.getByLabel(/small blind/i).fill('10');
+    await hostPage.getByLabel(/big blind/i).fill('20');
+    await hostPage.getByRole('button', { name: 'Start Game' }).click();
+    await expect(hostPage.getByTestId('pot')).toHaveText('30');
+
+    // Alice folds → round label becomes 'showdown', pot remains 30
+    await hostPage.getByTestId('btn-fold').click();
+    await expect(hostPage.getByText('showdown')).toBeVisible();
+    await expect(hostPage.getByTestId('pot')).toHaveText('30');
+
+    // Only host sees Accept button; Bob does not see declare-winner-panel
+    await expect(hostPage.getByTestId('declare-winner-panel')).toBeVisible();
+    await expect(hostPage.getByTestId('accept-winner-btn')).toBeVisible();
+    await expect(bobPage.getByTestId('declare-winner-panel')).not.toBeVisible();
+
+    // Advance Round button must not be visible (already in showdown)
+    await expect(hostPage.getByTestId('advance-round-btn')).not.toBeVisible();
+
+    // Host accepts: pot clears, chips transfer to Bob, New Hand button appears
+    await hostPage.getByTestId('accept-winner-btn').click();
+    await expect(hostPage.getByTestId('pot')).toHaveText('0');
+    await expect(hostPage.getByTestId('chips-Bob')).toHaveText('1010');
+    await expect(hostPage.getByTestId('new-hand-btn')).toBeVisible();
+    await expect(bobPage.getByTestId('new-hand-btn')).not.toBeVisible();
+
+    // New Hand starts successfully
+    await hostPage.getByTestId('new-hand-btn').click();
+    await expect(hostPage.getByTestId('pot')).toHaveText('30');
+    await expect(bobPage.getByTestId('pot')).toHaveText('30');
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+});
+
 test.describe('Game ends when only one player remains', () => {
   test('New Hand with one eliminated player transitions to game-over screen', async ({ browser }) => {
     // Setup: starting stack = 20 = bigBlind, so Bob (BB) posts 20 → chipCount=0 (all-in).

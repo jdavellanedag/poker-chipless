@@ -175,21 +175,19 @@ export function fold(state: GameState, playerId: string): GameResult {
   if (contesting.length === 1) {
     const winner = contesting[0];
     const winnerIndex = players.findIndex((p) => p.id === winner.id);
-    const awardedPlayers = players.map((p) =>
-      p.id === winner.id ? { ...p, chipCount: p.chipCount + state.pot } : p,
-    );
     return {
       ok: true,
       state: withValidActions({
         ...state,
-        players: awardedPlayers,
+        phase: 'showdown',
+        round: 'showdown',
+        players,
         activePlayerIndex: winnerIndex,
         roundComplete: true,
         log: [
           ...log,
           { timestamp: new Date().toISOString(), message: `${winner.displayName} wins ${state.pot} (everyone else folded)` },
         ],
-        pot: 0,
       }),
     };
   }
@@ -433,10 +431,12 @@ export function advanceRound(state: GameState): GameResult {
     { timestamp: new Date().toISOString(), message: ROUND_LABELS[nextRound] },
   ];
 
+  const isShowdown = nextRound === 'showdown';
   return {
     ok: true,
     state: detectRoundComplete({
       ...state,
+      phase: isShowdown ? 'showdown' : state.phase,
       round: nextRound,
       currentBet: 0,
       lastRaiseSize: state.bigBlind,
@@ -449,8 +449,8 @@ export function advanceRound(state: GameState): GameResult {
 }
 
 export function declareWinner(state: GameState, playerId: string): GameResult {
-  if (state.phase !== 'active') {
-    return { ok: false, error: 'Game is not active.' };
+  if (state.phase !== 'showdown') {
+    return { ok: false, error: 'Cannot declare a winner outside of showdown.' };
   }
   const winner = state.players.find((p) => p.id === playerId);
   if (!winner) {
@@ -482,6 +482,7 @@ export function declareWinner(state: GameState, playerId: string): GameResult {
     ok: true,
     state: withValidActions({
       ...state,
+      phase: 'active',
       pot: 0,
       players,
       log,

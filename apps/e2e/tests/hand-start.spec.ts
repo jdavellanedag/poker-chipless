@@ -54,11 +54,14 @@ test.describe('Hand start — New Hand button', () => {
     // Mid-hand: New Hand is not visible while pot > 0
     await expect(hostPage.getByTestId('new-hand-btn')).not.toBeVisible();
 
-    // Alice (SB/button, host) folds → Bob wins, pot goes to 0
+    // Alice (SB/button, host) folds → enters showdown, Accept button appears
     await hostPage.getByTestId('btn-fold').click();
-    await expect(hostPage.getByTestId('pot')).toHaveText('0');
+    await expect(hostPage.getByTestId('accept-winner-btn')).toBeVisible();
+    await expect(hostPage.getByTestId('new-hand-btn')).not.toBeVisible();
 
-    // Now New Hand should appear
+    // Host accepts → pot cleared, New Hand appears
+    await hostPage.getByTestId('accept-winner-btn').click();
+    await expect(hostPage.getByTestId('pot')).toHaveText('0');
     await expect(hostPage.getByTestId('new-hand-btn')).toBeVisible();
 
     await hostCtx.close();
@@ -74,8 +77,9 @@ test.describe('Hand start — New Hand button', () => {
     await hostPage.getByLabel(/big blind/i).fill('20');
     await hostPage.getByRole('button', { name: 'Start Game' }).click();
 
-    // Alice (SB/host) folds → Bob wins, pot cleared, New Hand appears for host
+    // Alice (SB/host) folds → showdown, host accepts → pot cleared, New Hand appears for host
     await hostPage.getByTestId('btn-fold').click();
+    await hostPage.getByTestId('accept-winner-btn').click();
     await expect(hostPage.getByTestId('new-hand-btn')).toBeVisible();
 
     // Non-host (Bob) must never see the New Hand button
@@ -98,8 +102,9 @@ test.describe('Hand start — New Hand button', () => {
     await expect(hostPage.getByTestId('chips-Alice')).toHaveText('990');
     await expect(hostPage.getByTestId('chips-Bob')).toHaveText('980');
 
-    // End hand 1: Alice (SB/host) folds → Bob wins pot(30), pot→0
+    // End hand 1: Alice (SB/host) folds → showdown → host accepts → Bob wins pot(30), pot→0
     await hostPage.getByTestId('btn-fold').click();
+    await hostPage.getByTestId('accept-winner-btn').click();
     await expect(hostPage.getByTestId('pot')).toHaveText('0');
 
     // Host clicks New Hand → second hand: button advances to Bob(SB), Alice(BB)

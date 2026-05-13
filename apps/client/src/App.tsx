@@ -128,7 +128,7 @@ export default function App() {
         </CenteredCard>
       );
     }
-    if (gameState.phase === 'active') {
+    if (gameState.phase === 'active' || gameState.phase === 'showdown') {
       return (
         <GameScreen
           state={gameState}
@@ -588,7 +588,7 @@ function GameScreen({
           </button>
         )}
 
-        {isHost && state.round === 'showdown' && state.pot > 0 && (
+        {isHost && state.phase === 'showdown' && state.pot > 0 && (
           <DeclareWinnerPanel state={state} onDeclareWinner={onDeclareWinner} />
         )}
 
@@ -615,6 +615,21 @@ function DeclareWinnerPanel({
 }) {
   const eligible = state.players.filter((p) => !p.isEliminated && !p.isFolded);
   const [selectedId, setSelectedId] = useState(eligible[0]?.id ?? '');
+
+  if (eligible.length === 1) {
+    const winner = eligible[0];
+    return (
+      <div data-testid="declare-winner-panel" className="space-y-2">
+        <button
+          data-testid="accept-winner-btn"
+          onClick={() => onDeclareWinner(winner.id)}
+          className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-semibold py-2 rounded"
+        >
+          Accept — {winner.displayName} wins {state.pot}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div data-testid="declare-winner-panel" className="space-y-2">

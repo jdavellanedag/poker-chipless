@@ -38,23 +38,31 @@ async function startHandWith2Players(browser: Browser) {
 }
 
 test.describe('Fold during a hand', () => {
-  test('active player folds: pot awarded to winner, action buttons gone for both', async ({ browser }) => {
-    // Heads-up: Alice(host)=SB/button acts first. She folds → Bob wins the pot (30).
+  test('active player folds: enters showdown, host accepts, pot awarded to winner', async ({ browser }) => {
+    // Heads-up: Alice(host)=SB/button acts first. She folds → showdown with Bob as sole survivor.
+    // Host clicks Accept → pot transfers to Bob.
     const { hostCtx, hostPage, bobCtx, bobPage } = await startHandWith2Players(browser);
 
     // Alice is active — she folds
     await hostPage.getByTestId('btn-fold').click();
 
-    // Pot awarded to Bob: pot shows 0.
-    // Bob posted BB(20) → 980, wins pot(30) → 1010.
-    await expect(hostPage.getByTestId('pot')).toHaveText('0');
-    await expect(hostPage.getByTestId('chips-Bob')).toHaveText('1010');
-    await expect(bobPage.getByTestId('pot')).toHaveText('0');
-    await expect(bobPage.getByTestId('chips-Bob')).toHaveText('1010');
+    // Showdown entered: pot stays at 30, Accept button visible for host
+    await expect(hostPage.getByTestId('declare-winner-panel')).toBeVisible();
+    await expect(hostPage.getByTestId('accept-winner-btn')).toBeVisible();
+    await expect(bobPage.getByTestId('declare-winner-panel')).not.toBeVisible();
 
     // Action buttons must not be visible for either player
     await expect(hostPage.getByTestId('action-buttons')).not.toBeVisible();
     await expect(bobPage.getByTestId('action-buttons')).not.toBeVisible();
+
+    // Host accepts: pot transfers to Bob
+    await hostPage.getByTestId('accept-winner-btn').click();
+
+    // Bob posted BB(20) → 980, wins pot(30) → 1010
+    await expect(hostPage.getByTestId('pot')).toHaveText('0');
+    await expect(hostPage.getByTestId('chips-Bob')).toHaveText('1010');
+    await expect(bobPage.getByTestId('pot')).toHaveText('0');
+    await expect(bobPage.getByTestId('chips-Bob')).toHaveText('1010');
 
     await hostCtx.close();
     await bobCtx.close();

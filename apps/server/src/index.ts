@@ -126,6 +126,7 @@ io.on('connection', (socket) => {
       ack({ ok: true });
       return;
     }
+    session.state = { ...session.state, phase: 'active' };
     const result = newHand(session.state);
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
