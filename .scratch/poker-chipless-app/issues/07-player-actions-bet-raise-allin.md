@@ -1,10 +1,10 @@
 ---
-status: pending
+status: done
 ---
 
 # Player Actions — Bet / Raise / All-In
 
-> **Status:** `pending`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._

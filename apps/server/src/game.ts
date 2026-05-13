@@ -97,7 +97,7 @@ export function newHand(state: GameState): GameResult {
 
   return {
     ok: true,
-    state: {
+    state: withValidActions({
       ...state,
       round: 'preflop',
       dealerButtonIndex: buttonIndex,
@@ -108,7 +108,7 @@ export function newHand(state: GameState): GameResult {
       roundComplete: false,
       players,
       log,
-    },
+    }),
   };
 }
 
@@ -121,19 +121,37 @@ function nextFoldAwareIndex(players: GameState['players'], fromIndex: number): n
   return fromIndex;
 }
 
+export function withValidActions(state: GameState): GameState {
+  const active = state.players[state.activePlayerIndex];
+  const players = state.players.map((p) => {
+    if (p.id !== active?.id || p.isEliminated || p.isFolded || p.isAllIn || state.roundComplete) {
+      return { ...p, validActions: [] as GameState['players'][number]['validActions'] };
+    }
+    const callAmount = state.currentBet - p.currentBet;
+    if (callAmount > 0 && p.chipCount <= callAmount) {
+      return { ...p, validActions: ['allin', 'fold'] as GameState['players'][number]['validActions'] };
+    }
+    if (state.currentBet === 0) {
+      return { ...p, validActions: ['bet', 'check', 'fold', 'allin'] as GameState['players'][number]['validActions'] };
+    }
+    return { ...p, validActions: ['call', 'raise', 'fold', 'allin'] as GameState['players'][number]['validActions'] };
+  });
+  return { ...state, players };
+}
+
 function detectRoundComplete(state: GameState): GameState {
   const contesting = state.players.filter((p) => !p.isFolded && !p.isEliminated);
   const allActed = contesting.every((p) => p.isAllIn || p.hasActedThisRound);
   const allMatched = contesting.every((p) => p.isAllIn || p.currentBet === state.currentBet);
-  if (!allActed || !allMatched || state.roundComplete) return state;
-  return {
+  if (!allActed || !allMatched || state.roundComplete) return withValidActions(state);
+  return withValidActions({
     ...state,
     roundComplete: true,
     log: [
       ...state.log,
       { timestamp: new Date().toISOString(), message: 'Betting round complete. Host may advance.' },
     ],
-  };
+  });
 }
 
 export function fold(state: GameState, playerId: string): GameResult {
@@ -162,7 +180,7 @@ export function fold(state: GameState, playerId: string): GameResult {
     );
     return {
       ok: true,
-      state: {
+      state: withValidActions({
         ...state,
         players: awardedPlayers,
         activePlayerIndex: winnerIndex,
@@ -172,7 +190,7 @@ export function fold(state: GameState, playerId: string): GameResult {
           { timestamp: new Date().toISOString(), message: `${winner.displayName} wins ${state.pot} (everyone else folded)` },
         ],
         pot: 0,
-      },
+      }),
     };
   }
 
@@ -230,6 +248,146 @@ export function call(state: GameState, playerId: string): GameResult {
   return {
     ok: true,
     state: detectRoundComplete({ ...state, players, log, pot: state.pot + actualAmount, activePlayerIndex: nextIndex }),
+  };
+}
+
+export function allin(state: GameState, playerId: string): GameResult {
+  if (state.phase !== 'active') {
+    return { ok: false, error: 'Game is not active.' };
+  }
+  const activePlayer = state.players[state.activePlayerIndex];
+  if (activePlayer.id !== playerId) {
+    return { ok: false, error: 'It is not your turn.' };
+  }
+
+  const allInAmount = activePlayer.chipCount;
+  const totalBet = activePlayer.currentBet + allInAmount;
+  const newCurrentBet = Math.max(state.currentBet, totalBet);
+  const newLastRaiseSize = totalBet > state.currentBet
+    ? Math.max(state.lastRaiseSize, totalBet - state.currentBet)
+    : state.lastRaiseSize;
+
+  const players = state.players.map((p, i) => {
+    if (i === state.activePlayerIndex) {
+      return { ...p, chipCount: 0, currentBet: totalBet, isAllIn: true, hasActedThisRound: true };
+    }
+    // Re-open betting if this all-in raises the bet above the current bet
+    if (totalBet > state.currentBet && !p.isFolded && !p.isEliminated && !p.isAllIn) {
+      return { ...p, hasActedThisRound: false };
+    }
+    return p;
+  });
+  const log = [
+    ...state.log,
+    { timestamp: new Date().toISOString(), message: `${activePlayer.displayName} goes all-in for ${allInAmount}` },
+  ];
+
+  const nextIndex = nextFoldAwareIndex(players, state.activePlayerIndex);
+  return {
+    ok: true,
+    state: detectRoundComplete({
+      ...state,
+      players,
+      log,
+      currentBet: newCurrentBet,
+      lastRaiseSize: newLastRaiseSize,
+      pot: state.pot + allInAmount,
+      activePlayerIndex: nextIndex,
+    }),
+  };
+}
+
+export function raise(state: GameState, playerId: string, raiseTotal: number): GameResult {
+  if (state.phase !== 'active') {
+    return { ok: false, error: 'Game is not active.' };
+  }
+  const activePlayer = state.players[state.activePlayerIndex];
+  if (activePlayer.id !== playerId) {
+    return { ok: false, error: 'It is not your turn.' };
+  }
+  if (state.currentBet === 0) {
+    return { ok: false, error: 'No open bet to raise. Use bet.' };
+  }
+  const minRaiseTotal = state.currentBet + state.lastRaiseSize;
+  if (raiseTotal < minRaiseTotal) {
+    return { ok: false, error: `Minimum raise is to ${minRaiseTotal}.` };
+  }
+  const addAmount = raiseTotal - activePlayer.currentBet;
+  if (addAmount > activePlayer.chipCount) {
+    return { ok: false, error: 'Raise exceeds your chip count.' };
+  }
+
+  const raiseIncrement = raiseTotal - state.currentBet;
+  const players = state.players.map((p, i) => {
+    if (i === state.activePlayerIndex) {
+      return { ...p, chipCount: p.chipCount - addAmount, currentBet: raiseTotal, hasActedThisRound: true };
+    }
+    // Re-open betting for all non-folded, non-eliminated, non-all-in players except the raiser
+    if (!p.isFolded && !p.isEliminated && !p.isAllIn) {
+      return { ...p, hasActedThisRound: false };
+    }
+    return p;
+  });
+  const log = [
+    ...state.log,
+    { timestamp: new Date().toISOString(), message: `${activePlayer.displayName} raises to ${raiseTotal}` },
+  ];
+
+  const nextIndex = nextFoldAwareIndex(players, state.activePlayerIndex);
+  return {
+    ok: true,
+    state: detectRoundComplete({
+      ...state,
+      players,
+      log,
+      currentBet: raiseTotal,
+      lastRaiseSize: raiseIncrement,
+      pot: state.pot + addAmount,
+      activePlayerIndex: nextIndex,
+    }),
+  };
+}
+
+export function bet(state: GameState, playerId: string, amount: number): GameResult {
+  if (state.phase !== 'active') {
+    return { ok: false, error: 'Game is not active.' };
+  }
+  const activePlayer = state.players[state.activePlayerIndex];
+  if (activePlayer.id !== playerId) {
+    return { ok: false, error: 'It is not your turn.' };
+  }
+  if (state.currentBet !== 0) {
+    return { ok: false, error: 'Cannot bet when there is already an open bet. Use raise.' };
+  }
+  if (amount < state.bigBlind) {
+    return { ok: false, error: `Minimum bet is the big blind (${state.bigBlind}).` };
+  }
+  if (amount > activePlayer.chipCount) {
+    return { ok: false, error: 'Bet exceeds your chip count.' };
+  }
+
+  const players = state.players.map((p, i) =>
+    i === state.activePlayerIndex
+      ? { ...p, chipCount: p.chipCount - amount, currentBet: amount, hasActedThisRound: true }
+      : p,
+  );
+  const log = [
+    ...state.log,
+    { timestamp: new Date().toISOString(), message: `${activePlayer.displayName} bets ${amount}` },
+  ];
+
+  const nextIndex = nextFoldAwareIndex(players, state.activePlayerIndex);
+  return {
+    ok: true,
+    state: detectRoundComplete({
+      ...state,
+      players,
+      log,
+      currentBet: amount,
+      lastRaiseSize: amount,
+      pot: state.pot + amount,
+      activePlayerIndex: nextIndex,
+    }),
   };
 }
 

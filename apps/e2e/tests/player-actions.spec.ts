@@ -106,6 +106,79 @@ test.describe('Check during a hand', () => {
   });
 });
 
+test.describe('Auto all-in on call', () => {
+  test('player whose stack cannot cover the call sees no Call button — only All-In and Fold', async ({ browser }) => {
+    // Alice starts with 15 chips. Posts SB=10, has 5 left. Call amount = BB(20) - SB_posted(10) = 10.
+    // Alice.chipCount(5) <= callAmount(10) → Call is replaced by All-In.
+    const { ctx: hostCtx, page: hostPage, code } = await createSession(browser, 'Alice');
+    const { ctx: bobCtx } = await joinSession(browser, code, 'Bob');
+
+    await hostPage.getByLabel(/starting stack/i).fill('15');
+    await hostPage.getByLabel(/small blind/i).fill('10');
+    await hostPage.getByLabel(/big blind/i).fill('20');
+    await hostPage.getByRole('button', { name: 'Start Game' }).click();
+    await expect(hostPage.getByTestId('pot')).toBeVisible();
+
+    // Alice (SB/button) is active — she can't cover the 10-chip call, so Call must be hidden
+    await expect(hostPage.getByTestId('btn-call')).not.toBeVisible();
+    await expect(hostPage.getByTestId('btn-allin')).toBeVisible();
+    await expect(hostPage.getByTestId('btn-fold')).toBeVisible();
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+});
+
+test.describe('All-in during a hand', () => {
+  test('"All-In (X)" button shows the active player\'s chip count', async ({ browser }) => {
+    // Heads-up: Alice(SB/button)=active after posting SB(10), leaving her with 990 chips.
+    const { hostCtx, hostPage, bobCtx, bobPage } = await startHandWith2Players(browser);
+
+    // Alice is active and has 990 chips left (posted SB=10 from 1000)
+    await expect(hostPage.getByTestId('btn-allin')).toHaveText('All-In (990)');
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+
+  test('active player goes all-in: chips reach 0, pot increases', async ({ browser }) => {
+    // Alice(SB/button) goes all-in for 990. Pot was 30 (blinds) → 30 + 990 = 1020.
+    const { hostCtx, hostPage, bobCtx, bobPage } = await startHandWith2Players(browser);
+
+    await hostPage.getByTestId('btn-allin').click();
+
+    await expect(hostPage.getByTestId('chips-Alice')).toHaveText('0');
+    await expect(hostPage.getByTestId('pot')).toHaveText('1020');
+    await expect(bobPage.getByTestId('chips-Alice')).toHaveText('0');
+    await expect(bobPage.getByTestId('pot')).toHaveText('1020');
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+});
+
+test.describe('Raise during a hand', () => {
+  test('raise input shows minimum raise amount and raise updates currentBet', async ({ browser }) => {
+    // Heads-up: Alice(SB) is active. currentBet=20, lastRaiseSize=20. Min raise = 40.
+    const { hostCtx, hostPage, bobCtx, bobPage } = await startHandWith2Players(browser);
+
+    // Raise input defaults to minimum (currentBet + lastRaiseSize = 40)
+    await expect(hostPage.getByTestId('raise-input')).toHaveValue('40');
+
+    // Alice raises to 40. She had 990 chips (posted SB 10). Puts in 40 total → 960 left.
+    await hostPage.getByTestId('btn-raise').click();
+
+    await expect(hostPage.getByTestId('chips-Alice')).toHaveText('960');
+    // pot was 30 (blinds) + 30 (Alice raises to 40, puts in 40 total but 10 already from SB → +30) = 60
+    await expect(hostPage.getByTestId('pot')).toHaveText('60');
+    // Turn advances to Bob
+    await expect(bobPage.getByTestId('action-buttons')).toBeVisible();
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+});
+
 test.describe('Player action buttons', () => {
   test('action buttons are visible only to the active player', async ({ browser }) => {
     // Heads-up: Alice=SB/button acts first preflop, Bob=BB
