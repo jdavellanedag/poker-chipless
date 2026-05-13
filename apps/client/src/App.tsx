@@ -469,12 +469,14 @@ function GameScreen({
   const bbIdx = hasHand ? nonElim(sbIdx) : -1;
 
   const isPaused = state.phase === 'paused';
+  const hostPlayer = state.players.find((p) => p.isHost);
+  const hostDisconnected = hostPlayer ? !hostPlayer.isConnected : false;
 
   return (
     <div className="min-h-screen bg-slate-900">
       {!isHost && isPaused && (
         <div data-testid="pause-banner" className="bg-yellow-600 text-white text-center py-2 px-4 font-semibold text-sm">
-          Game paused by host
+          {hostDisconnected ? 'Waiting for host to reconnect…' : 'Game paused by host'}
         </div>
       )}
       <div className={`p-4 transition-opacity ${!isHost && isPaused ? 'opacity-50' : ''}`}>

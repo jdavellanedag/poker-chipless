@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createSession, joinSession } from '../session.js';
-import { appendLog, startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, withValidActions, advanceRound, declareWinner, pause, resume, rebuy } from '../game.js';
+import { appendLog, startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, withValidActions, advanceRound, declareWinner, pause, resume, rebuy, autoFold } from '../game.js';
 
 describe('appendLog', () => {
   it('appends an entry with the given message and an ISO timestamp to state.log', () => {
@@ -1145,6 +1145,36 @@ describe('rebuy', () => {
   it('rejects an unknown player id', () => {
     const state = makeActive(['Alice', 'Bob']);
     const result = rebuy(state, 'no-such-id', 100);
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('autoFold', () => {
+  it('folds the active player, logs "<name> auto-folded (disconnected)", and advances turn', () => {
+    const state = makeActive(['Alice', 'Bob', 'Carol']);
+    const activePlayer = state.players[state.activePlayerIndex];
+
+    const result = autoFold(state, activePlayer.id);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.players.find((p) => p.id === activePlayer.id)!.isFolded).toBe(true);
+    expect(result.state.log.map((e) => e.message)).toContain(
+      `${activePlayer.displayName} auto-folded (disconnected)`,
+    );
+    expect(result.state.activePlayerIndex).not.toBe(state.activePlayerIndex);
+  });
+
+  it('rejects when it is not the given player\'s turn', () => {
+    const state = makeActive(['Alice', 'Bob', 'Carol']);
+    const nonActive = state.players.find((p) => p.id !== state.players[state.activePlayerIndex].id)!;
+    const result = autoFold(state, nonActive.id);
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects when the game is not active', () => {
+    const state = { ...makeActive(['Alice', 'Bob']), phase: 'paused' as const };
+    const result = autoFold(state, state.players[state.activePlayerIndex].id);
     expect(result.ok).toBe(false);
   });
 });

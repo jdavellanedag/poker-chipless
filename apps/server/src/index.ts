@@ -6,7 +6,7 @@ import express from 'express';
 import { Server } from 'socket.io';
 import type { ServerToClientEvents, ClientToServerEvents, GameState, CreateAckResponse, JoinAckResponse } from '@poker-chipless/types';
 import { createSession, joinSession } from './session.js';
-import { appendLog, startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, advanceRound, declareWinner, pause, resume, rebuy } from './game.js';
+import { appendLog, startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, advanceRound, declareWinner, pause, resume, rebuy, autoFold } from './game.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -21,8 +21,45 @@ app.get('/*path', (_req, res) => {
   res.sendFile(join(clientBuildPath, 'index.html'));
 });
 
-// session code → { state, tokenMap: Map<token, playerId> }
-const sessions = new Map<string, { state: GameState; tokenMap: Map<string, string> }>();
+const DISCONNECT_TIMEOUT_MS = parseInt(process.env.DISCONNECT_TIMEOUT_MS ?? '10000', 10);
+
+type SessionRecord = {
+  state: GameState;
+  tokenMap: Map<string, string>;
+  previousPhase?: GameState['phase'];
+  autoFoldTimer?: ReturnType<typeof setTimeout>;
+};
+
+// session code → SessionRecord
+const sessions = new Map<string, SessionRecord>();
+
+function maybeScheduleAutoFold(code: string) {
+  const session = sessions.get(code);
+  if (!session) return;
+  const { state } = session;
+  const activePlayer = state.players[state.activePlayerIndex];
+  if (!activePlayer || activePlayer.isConnected || state.phase !== 'active') {
+    if (session.autoFoldTimer !== undefined) {
+      clearTimeout(session.autoFoldTimer);
+      session.autoFoldTimer = undefined;
+    }
+    return;
+  }
+  if (session.autoFoldTimer === undefined) {
+    const playerId = activePlayer.id;
+    session.autoFoldTimer = setTimeout(() => {
+      session.autoFoldTimer = undefined;
+      const s = sessions.get(code);
+      if (!s) return;
+      const result = autoFold(s.state, playerId);
+      if (result.ok) {
+        s.state = result.state;
+        io.to(code).emit('game:state', s.state);
+        maybeScheduleAutoFold(code);
+      }
+    }, DISCONNECT_TIMEOUT_MS);
+  }
+}
 
 io.on('connection', (socket) => {
   socket.on('session:create', ({ displayName }, ack) => {
@@ -56,16 +93,22 @@ io.on('connection', (socket) => {
       const playerId = session.tokenMap.get(token)!;
       const player = session.state.players.find((p) => p.id === playerId);
       if (player) {
-        session.state = appendLog({
+        let restoredState: GameState = {
           ...session.state,
           players: session.state.players.map((p) =>
             p.id === playerId ? { ...p, isConnected: true } : p,
           ),
-        }, `${player.displayName} reconnected`);
+        };
+        if (player.isHost && session.state.phase === 'paused' && session.previousPhase !== undefined) {
+          restoredState = { ...restoredState, phase: session.previousPhase };
+          session.previousPhase = undefined;
+        }
+        session.state = appendLog(restoredState, `${player.displayName} reconnected`);
         socket.join(code.toUpperCase());
         socket.data.code = code.toUpperCase();
         socket.data.playerId = playerId;
         io.to(code.toUpperCase()).emit('game:state', session.state);
+        maybeScheduleAutoFold(code.toUpperCase());
         ack({ ok: true, token, playerId } as JoinAckResponse);
         return;
       }
@@ -111,6 +154,7 @@ io.on('connection', (socket) => {
     if (!handResult.ok) { ack({ ok: false, error: handResult.error }); return; }
     session.state = handResult.state;
     io.to(code!).emit('game:state', session.state);
+    maybeScheduleAutoFold(code!);
     ack({ ok: true });
   });
 
@@ -132,6 +176,7 @@ io.on('connection', (socket) => {
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
+    maybeScheduleAutoFold(code!);
     ack({ ok: true });
   });
 
@@ -145,6 +190,7 @@ io.on('connection', (socket) => {
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
+    maybeScheduleAutoFold(code!);
     ack({ ok: true });
   });
 
@@ -169,6 +215,7 @@ io.on('connection', (socket) => {
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
+    maybeScheduleAutoFold(code!);
     ack({ ok: true });
   });
 
@@ -180,6 +227,7 @@ io.on('connection', (socket) => {
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
+    maybeScheduleAutoFold(code!);
     ack({ ok: true });
   });
 
@@ -191,6 +239,7 @@ io.on('connection', (socket) => {
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
+    maybeScheduleAutoFold(code!);
     ack({ ok: true });
   });
 
@@ -202,6 +251,7 @@ io.on('connection', (socket) => {
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
+    maybeScheduleAutoFold(code!);
     ack({ ok: true });
   });
 
@@ -213,6 +263,7 @@ io.on('connection', (socket) => {
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
+    maybeScheduleAutoFold(code!);
     ack({ ok: true });
   });
 
@@ -224,6 +275,7 @@ io.on('connection', (socket) => {
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
+    maybeScheduleAutoFold(code!);
     ack({ ok: true });
   });
 
@@ -236,6 +288,7 @@ io.on('connection', (socket) => {
     const result = pause(session.state);
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
+    maybeScheduleAutoFold(code!);
     io.to(code!).emit('game:state', session.state);
     ack({ ok: true });
   });
@@ -272,12 +325,32 @@ io.on('connection', (socket) => {
     const session = sessions.get(code);
     if (!session) return;
     const player = session.state.players.find((p) => p.id === playerId);
-    session.state = appendLog({
+
+    const disconnectedState: GameState = {
       ...session.state,
       players: session.state.players.map((p) =>
         p.id === playerId ? { ...p, isConnected: false } : p,
       ),
-    }, player ? `${player.displayName} disconnected` : 'A player disconnected');
+    };
+
+    if (player?.isHost && (session.state.phase === 'active' || session.state.phase === 'showdown')) {
+      session.previousPhase = session.state.phase;
+      session.state = appendLog(
+        { ...disconnectedState, phase: 'paused' },
+        `${player.displayName} disconnected`,
+      );
+      if (session.autoFoldTimer !== undefined) {
+        clearTimeout(session.autoFoldTimer);
+        session.autoFoldTimer = undefined;
+      }
+    } else {
+      session.state = appendLog(
+        disconnectedState,
+        player ? `${player.displayName} disconnected` : 'A player disconnected',
+      );
+      maybeScheduleAutoFold(code);
+    }
+
     io.to(code).emit('game:state', session.state);
   });
 });

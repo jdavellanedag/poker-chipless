@@ -21,7 +21,7 @@ export default defineConfig({
   // Requires a prior `npm run build` — run `npm run test:e2e` from the repo root
   // which handles the build step automatically.
   webServer: {
-    command: 'node ../server/dist/index.js',
+    command: 'DISCONNECT_TIMEOUT_MS=2000 node ../server/dist/index.js',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     stdout: 'ignore',
