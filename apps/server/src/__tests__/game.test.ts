@@ -1020,6 +1020,53 @@ describe('validActions during showdown', () => {
       expect(p.validActions).toHaveLength(0);
     });
   });
+
+  it('all players have empty validActions after declareWinner via normal showdown path', () => {
+    // Bug: after advanceRound → showdown (roundComplete=false) and then declareWinner
+    // transitions phase back to 'active', the active player was incorrectly assigned valid
+    // actions because roundComplete was still false and phase was no longer 'showdown'.
+    const hand = makeHand(['Alice', 'Bob']);
+    const riverDone = {
+      ...hand,
+      round: 'river' as const,
+      roundComplete: true,
+      pot: 100,
+      players: hand.players.map((p) => ({ ...p, hasActedThisRound: true, currentBet: 0 })),
+    };
+    const afterShowdown = advanceRound(riverDone);
+    expect(afterShowdown.ok).toBe(true);
+    if (!afterShowdown.ok) return;
+    expect(afterShowdown.state.phase).toBe('showdown');
+    expect(afterShowdown.state.roundComplete).toBe(false); // not set during showdown phase
+
+    const alice = afterShowdown.state.players.find((p) => p.displayName === 'Alice')!;
+    const afterWinner = declareWinner(afterShowdown.state, alice.id);
+    expect(afterWinner.ok).toBe(true);
+    if (!afterWinner.ok) return;
+    expect(afterWinner.state.phase).toBe('active');
+    afterWinner.state.players.forEach((p) => {
+      expect(p.validActions).toHaveLength(0);
+    });
+  });
+
+  it('all players have empty validActions after declareWinner via fold-win showdown', () => {
+    // Fold-win path already set roundComplete=true before showdown; this confirms
+    // declareWinner preserves that invariant after transitioning back to active.
+    const hand = makeHand(['Alice', 'Bob']);
+    const afterFold = fold(hand, hand.players[0].id); // Alice folds → Bob wins, fold-win showdown
+    expect(afterFold.ok).toBe(true);
+    if (!afterFold.ok) return;
+    expect(afterFold.state.phase).toBe('showdown');
+
+    const bob = afterFold.state.players.find((p) => p.displayName === 'Bob')!;
+    const afterWinner = declareWinner(afterFold.state, bob.id);
+    expect(afterWinner.ok).toBe(true);
+    if (!afterWinner.ok) return;
+    expect(afterWinner.state.phase).toBe('active');
+    afterWinner.state.players.forEach((p) => {
+      expect(p.validActions).toHaveLength(0);
+    });
+  });
 });
 
 describe('startGame log', () => {

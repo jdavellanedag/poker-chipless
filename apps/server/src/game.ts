@@ -420,7 +420,7 @@ export function declareWinner(state: GameState, playerId: string): GameResult {
   return {
     ok: true,
     state: withValidActions(appendLog(
-      { ...state, phase: 'active', pot: 0, players },
+      { ...state, phase: 'active', pot: 0, players, roundComplete: true },
       `${winner.displayName} wins pot of ${potAmount}`,
     )),
   };

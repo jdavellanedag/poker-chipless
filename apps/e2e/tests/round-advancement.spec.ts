@@ -216,6 +216,27 @@ test.describe('Declare Winner at showdown', () => {
     await carolCtx.close();
   });
 
+  test('action buttons are hidden for all players after winner is declared at showdown', async ({ browser }) => {
+    // Bug: after declareWinner transitions phase back to 'active' (roundComplete=false),
+    // the next active player was incorrectly shown action buttons before New Hand was clicked.
+    const { hostCtx, hostPage, bobCtx, bobPage } = await startAndCompleteRound(browser);
+
+    await advanceToShowdown(hostPage, bobPage);
+    await hostPage.getByTestId('winner-select').selectOption({ index: 0 }); // Alice
+    await hostPage.getByTestId('declare-winner-btn').click();
+
+    // New Hand button visible to host, not Bob
+    await expect(hostPage.getByTestId('new-hand-btn')).toBeVisible();
+    await expect(bobPage.getByTestId('new-hand-btn')).not.toBeVisible();
+
+    // Action buttons must be hidden — neither player should be prompted to act
+    await expect(hostPage.getByTestId('action-buttons')).not.toBeVisible();
+    await expect(bobPage.getByTestId('action-buttons')).not.toBeVisible();
+
+    await hostCtx.close();
+    await bobCtx.close();
+  });
+
   test('clicking New Hand after a showdown deals the next hand with blinds posted', async ({ browser }) => {
     const { hostCtx, hostPage, bobCtx, bobPage } = await startAndCompleteRound(browser);
 
