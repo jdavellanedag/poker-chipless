@@ -1,10 +1,10 @@
 ---
-status: pending
+status: in-progress
 ---
 
 # Scrollable Player List in Game Screen
 
-> **Status:** `pending`
+> **Status:** `in-progress`
 
 ## Clarification
 
