@@ -498,7 +498,7 @@ function GameScreen({
           })}
         </ul>
 
-        {isMyTurn && !state.roundComplete && (
+        {isMyTurn && !state.roundComplete && state.phase !== 'showdown' && (
           <div data-testid="action-buttons" className="space-y-2 mb-4">
             <div className="flex gap-2">
               <button
