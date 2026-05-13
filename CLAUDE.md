@@ -4,22 +4,24 @@
 
 A real-time chipless poker manager for casual home games. Each player uses their own device; the host runs a local Node.js server. All chip management (blinds, bets, raises, folds, pot tracking) is handled by the app. Texas Hold'em only. No physical chips needed.
 
-Full spec and issues: `.scratch/<feature-slug>/` — see [Development Workflow](#development-workflow) below.
+Full spec, issues, and bug reports: `.scratch/<feature-slug>/` — see [Development Workflow](#development-workflow) below.
 
 ---
 
 ## Development Workflow
 
-Work is organized as features. Each feature has a PRD and a set of issues:
+Work is organized as features. Each feature has a PRD, a set of issues, and a bugs folder:
 
 ```
 .scratch/
 └── <feature-slug>/
     ├── PRD.md           # Full spec for this feature
-    └── issues/
-        ├── 01-<slug>.md
-        ├── 02-<slug>.md
-        └── ...
+    ├── issues/
+    │   ├── 01-<slug>.md
+    │   ├── 02-<slug>.md
+    │   └── ...
+    └── bugs/
+        └── <bug-slug>.md
 ```
 
 ### Implementing an Issue
@@ -32,6 +34,48 @@ Follow these steps in order for every issue:
 4. **Implement** — follow the red-green-refactor loop on the issue branch until all acceptance criteria are met.
 5. **Mark done** — update both status fields to `done` and commit.
 6. **Do not merge** — leave the branch open for the user to review and merge. Never merge or rebase into `main` yourself.
+
+### Fixing a Bug
+
+Follow these steps in order for every bug fix:
+
+1. **Invoke `/bugfix`** — the skill will interview you to fully understand the bug before any code is written. Do not create a branch or write any code before invoking it.
+2. **Create a branch** — `/bugfix` will create a branch off `main` using the pattern `bugfix/<bug-slug>` (e.g. `bugfix/fold-win-active-player-stuck`). Never commit bug-fix work directly to `main`.
+3. **Write the reproduction test first** — `/bugfix` writes a failing test that reproduces the bug before touching implementation. This is the red step of the red-green-refactor loop.
+4. **Fix the bug** — follow the red-green-refactor loop: make the reproduction test pass, then refactor. Do not write implementation code before the failing test exists.
+5. **Create the bug report file** — write `.scratch/<feature-slug>/bugs/<bug-slug>.md` documenting the description, root cause, fix, and tests (see format below). Set `status: merged` only after the branch is merged.
+6. **Invoke `/review`** — before merging, run `/review` on the bugfix branch. The skill reads the bug report, runs tests, audits the diff for gaps, and asks for merge confirmation.
+7. **Do not merge** — leave the branch open for the user to review and merge. Never merge or rebase into `main` yourself.
+
+#### Bug Report File Format
+
+```markdown
+# Bug: <Short title>
+
+> **Branch:** `bugfix/<bug-slug>`
+> **Status:** open | in-progress | merged
+
+## Description
+<What the user observes. When does it happen? Reproduction steps if known.>
+
+## Root Cause
+<What in the code caused it, once identified.>
+
+## Fix
+<What was changed and why.>
+
+**Files changed:** <list files>
+
+## Tests
+### Added
+- `<test name>` — `<file path>` — <what it asserts>
+
+### Updated (were asserting wrong behavior)
+<list or "None">
+
+## Affected Files
+- `<file>` — `<function/section>`: <what changed>
+```
 
 ### Issue Status
 
