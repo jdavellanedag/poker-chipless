@@ -1,10 +1,10 @@
 ---
-status: pending
+status: done
 ---
 
 # UI Polish & Responsive Layout
 
-> **Status:** `pending`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._
