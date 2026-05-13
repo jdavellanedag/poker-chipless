@@ -451,13 +451,19 @@ export function declareWinner(state: GameState, playerId: string): GameResult {
     };
   });
 
-  return {
-    ok: true,
-    state: withValidActions(appendLog(
-      { ...state, phase: 'active', pot: 0, players, roundComplete: true },
-      `${winner.displayName} wins pot of ${potAmount}`,
-    )),
-  };
+  const newlyEliminated = players.filter(
+    (p, i) => p.isEliminated && !state.players[i].isEliminated,
+  );
+
+  let afterWin = appendLog(
+    { ...state, phase: 'active', pot: 0, players, roundComplete: true },
+    `${winner.displayName} wins pot of ${potAmount}`,
+  );
+  for (const p of newlyEliminated) {
+    afterWin = appendLog(afterWin, `${p.displayName} has been eliminated`);
+  }
+
+  return { ok: true, state: withValidActions(afterWin) };
 }
 
 export function pause(state: GameState): GameResult {
@@ -493,7 +499,20 @@ export function rebuy(state: GameState, playerId: string, amount: number): GameR
   );
   return {
     ok: true,
-    state: appendLog({ ...state, players }, `${player.displayName} re-buys ${amount} chips`),
+    state: appendLog({ ...state, players }, `${player.displayName} re-buys for ${amount} chips`),
+  };
+}
+
+export function endGame(state: GameState): GameResult {
+  const remaining = state.players.filter((p) => !p.isEliminated);
+  if (remaining.length >= 2) {
+    return { ok: false, error: 'Cannot end game while 2 or more players remain.' };
+  }
+  const winner = remaining[0];
+  const message = winner ? `Game over — ${winner.displayName} wins!` : 'Game over';
+  return {
+    ok: true,
+    state: appendLog({ ...state, phase: 'ended' }, message),
   };
 }
 

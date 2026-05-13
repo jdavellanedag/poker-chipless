@@ -343,8 +343,8 @@ test.describe('Game ends when only one player remains', () => {
 
     // New Hand → only Alice is not eliminated → game ends
     await hostPage.getByTestId('new-hand-btn').click();
-    await expect(hostPage.getByText('Game Over')).toBeVisible();
-    await expect(bobPage.getByText('Game Over')).toBeVisible();
+    await expect(hostPage.getByRole('heading', { name: 'Game Over' })).toBeVisible();
+    await expect(bobPage.getByRole('heading', { name: 'Game Over' })).toBeVisible();
 
     await hostCtx.close();
     await bobCtx.close();
