@@ -1,10 +1,10 @@
 ---
-status: pending
+status: done
 ---
 
 # Split Game Logic Into Domain Files
 
-> **Status:** `pending`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._

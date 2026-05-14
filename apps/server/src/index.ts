@@ -6,7 +6,10 @@ import express from 'express';
 import { Server } from 'socket.io';
 import type { ServerToClientEvents, ClientToServerEvents, GameState, CreateAckResponse, JoinAckResponse } from '@poker-chipless/types';
 import { createSession, joinSession } from './session.js';
-import { appendLog, startGame, reorderPlayers, newHand, fold, check, call, bet, raise, allin, advanceRound, declareWinner, pause, resume, rebuy, autoFold, endGame } from './game.js';
+import { appendLog } from './game/state.js';
+import { fold, autoFold, check, call, bet, raise, allin } from './game/player-actions.js';
+import { startGame, newHand, declareWinner, rebuy, pause, resume, reorderPlayers, endGame } from './game/host-actions.js';
+import { advanceRound } from './game/round.js';
 
 const app = express();
 const httpServer = createServer(app);
