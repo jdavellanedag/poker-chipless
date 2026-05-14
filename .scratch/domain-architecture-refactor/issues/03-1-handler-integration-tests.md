@@ -1,10 +1,10 @@
 ---
-status: in-progress
+status: done
 ---
 
 # Handler Integration Tests
 
-> **Status:** `in-progress`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._
