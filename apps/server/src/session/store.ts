@@ -24,3 +24,12 @@ export function deleteSession(code: string): void {
 export function listSessions(): Map<string, SessionRecord> {
   return sessions;
 }
+
+export function clearStore(): void {
+  for (const record of sessions.values()) {
+    if (record.autoFoldTimer !== undefined) {
+      clearTimeout(record.autoFoldTimer);
+    }
+  }
+  sessions.clear();
+}
