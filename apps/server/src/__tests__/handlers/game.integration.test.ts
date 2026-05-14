@@ -55,16 +55,17 @@ async function setupStartedGame(): Promise<StartedGame> {
   });
   if (!joinAck.ok) throw new Error('join failed');
 
-  const statePromise = new Promise<GameState>((resolve) => {
-    hostClient.once('game:state', resolve);
-  });
+  const bothDrained = Promise.all([
+    new Promise<GameState>((r) => { hostClient.once('game:state', r); }),
+    new Promise<GameState>((r) => { playerClient.once('game:state', r); }),
+  ]);
 
   const startAck = await new Promise<AckResponse>((resolve) => {
     hostClient.emit('host:start-game', { startingStack: 1000, smallBlind: 10, bigBlind: 20 }, resolve);
   });
   if (!startAck.ok) throw new Error('start failed');
 
-  const state = await statePromise;
+  const [state] = await bothDrained;
 
   return {
     hostClient,
