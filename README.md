@@ -22,7 +22,7 @@ This is the recommended mode for an actual game night.
 # 1. Install dependencies (first time only)
 npm install
 
-# 2. Build the client
+# 2. Build the app
 npm run build
 
 # 3. Start the server
