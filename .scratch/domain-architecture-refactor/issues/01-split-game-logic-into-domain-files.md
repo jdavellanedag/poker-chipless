@@ -1,10 +1,10 @@
 ---
-status: in-progress
+status: done
 ---
 
 # Split Game Logic Into Domain Files
 
-> **Status:** `in-progress`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._
