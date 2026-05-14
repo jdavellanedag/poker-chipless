@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { createSession, joinSession } from '../../session.js';
+import { createSession } from '../../session/create.js';
+import { joinSession } from '../../session/join.js';
 import { startGame, newHand, declareWinner, pause, resume, rebuy, endGame, reorderPlayers } from '../../game/host-actions.js';
 
 function makelobby(playerNames: string[]) {
