@@ -1,10 +1,10 @@
 ---
-status: pending
+status: done
 ---
 
 # Split Handlers and Slim index.ts
 
-> **Status:** `pending`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._
