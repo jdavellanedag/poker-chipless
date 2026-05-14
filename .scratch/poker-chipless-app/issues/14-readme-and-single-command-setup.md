@@ -1,10 +1,10 @@
 ---
-status: pending
+status: done
 ---
 
 # README & Single-Command Setup
 
-> **Status:** `pending`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._

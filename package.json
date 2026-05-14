@@ -2,6 +2,10 @@
   "name": "poker-chipless",
   "private": true,
   "packageManager": "npm@10.0.0",
+  "engines": {
+    "node": ">=20",
+    "npm": ">=10"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -9,7 +13,7 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "start": "tsx apps/server/src/index.ts",
+    "start": "node apps/server/dist/index.js",
     "test:e2e": "npm run build && npx playwright test --config apps/e2e/playwright.config.ts",
     "test:e2e:headed": "npm run build && npx playwright test --config apps/e2e/playwright.config.ts --headed"
   },
