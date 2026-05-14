@@ -1,71 +1,22 @@
 import { useState, useEffect, useRef } from 'react';
 import type { GameState, LogEntry } from '@poker-chipless/types';
 import socket from './socket.js';
+import { useGameState } from './hooks/useGameState.js';
+import { useSession } from './hooks/useSession.js';
 
 export default function App() {
-  const [screen, setScreen] = useState<'home' | 'join'>('home');
-  const [gameState, setGameState] = useState<GameState | null>(null);
-  const [myPlayerId, setMyPlayerId] = useState('');
-  const [error, setError] = useState('');
-  const [createName, setCreateName] = useState('');
-  const [joinCode, setJoinCode] = useState('');
-  const [joinName, setJoinName] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    socket.connect();
-    socket.on('game:state', (state) => setGameState(state));
-
-    const savedCode = sessionStorage.getItem('session_code');
-    const savedToken = sessionStorage.getItem('session_token');
-    const savedName = sessionStorage.getItem('display_name');
-    const savedPlayerId = sessionStorage.getItem('player_id');
-    if (savedCode && savedToken && savedName && savedPlayerId) {
-      setMyPlayerId(savedPlayerId);
-      socket.emit('session:join', { code: savedCode, displayName: savedName, token: savedToken }, (res) => {
-        if (!res.ok) {
-          sessionStorage.clear();
-          setMyPlayerId('');
-        }
-      });
-    }
-
-    return () => { socket.off('game:state'); };
-  }, []);
-
-  function handleCreate() {
-    const name = createName.trim();
-    if (!name) { setError('Display name cannot be empty.'); return; }
-    setError('');
-    setLoading(true);
-    socket.emit('session:create', { displayName: name }, (res) => {
-      setLoading(false);
-      if (!res.ok) { setError(res.error); return; }
-      sessionStorage.setItem('session_code', res.code);
-      sessionStorage.setItem('session_token', res.token);
-      sessionStorage.setItem('display_name', name);
-      sessionStorage.setItem('player_id', res.playerId);
-      setMyPlayerId(res.playerId);
-    });
-  }
-
-  function handleJoin() {
-    const name = joinName.trim();
-    const code = joinCode.trim().toUpperCase();
-    if (!name) { setError('Display name cannot be empty.'); return; }
-    if (code.length !== 6) { setError('Session code must be 6 characters.'); return; }
-    setError('');
-    setLoading(true);
-    socket.emit('session:join', { code, displayName: name }, (res) => {
-      setLoading(false);
-      if (!res.ok) { setError(res.error); return; }
-      sessionStorage.setItem('session_code', code);
-      sessionStorage.setItem('session_token', res.token);
-      sessionStorage.setItem('display_name', name);
-      sessionStorage.setItem('player_id', res.playerId);
-      setMyPlayerId(res.playerId);
-    });
-  }
+  const { gameState } = useGameState();
+  const {
+    screen, setScreen,
+    myPlayerId,
+    error, setError,
+    createName, setCreateName,
+    joinCode, setJoinCode,
+    joinName, setJoinName,
+    loading,
+    handleCreate,
+    handleJoin,
+  } = useSession();
 
   function handleStartGame(startingStack: number, smallBlind: number, bigBlind: number, onResult: (err?: string) => void) {
     socket.emit('host:start-game', { startingStack, smallBlind, bigBlind }, (res) => {
