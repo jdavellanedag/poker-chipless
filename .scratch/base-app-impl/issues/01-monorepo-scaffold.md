@@ -10,7 +10,7 @@ status: done
 _No open questions._
 
 ## Context
-First issue in the poker-chipless-app project. Establishes the entire project skeleton that every subsequent issue builds on. Corresponds to M1 — Core Infrastructure.
+First issue in the base-app-impl project. Establishes the entire project skeleton that every subsequent issue builds on. Corresponds to M1 — Core Infrastructure.
 
 ## Goal
 Initialize a Turborepo workspace with `apps/client` (React + Vite + TypeScript + Tailwind), `apps/server` (Node.js + TypeScript), and `packages/types`. All `dev` and `build` scripts run from the repo root via a single command.
