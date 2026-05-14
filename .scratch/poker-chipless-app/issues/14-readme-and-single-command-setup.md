@@ -1,10 +1,10 @@
 ---
-status: pending
+status: in-progress
 ---
 
 # README & Single-Command Setup
 
-> **Status:** `pending`
+> **Status:** `in-progress`
 
 ## Clarification
 _No open questions._
