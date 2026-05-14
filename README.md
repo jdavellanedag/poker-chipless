@@ -8,8 +8,8 @@ Texas Hold'em only. The app handles all chip tracking, blind posting, bet valida
 
 ## Requirements
 
-- **Node.js** v18 or later
-- **npm** v9 or later
+- **Node.js** v20 or later (LTS recommended)
+- **npm** v10 or later
 - All players on the **same local network** (Wi-Fi or wired)
 
 ---
@@ -77,7 +77,7 @@ The game follows standard Texas Hold'em structure. The host drives pacing; playe
 
 ## Reconnecting
 
-If a player's browser closes or refreshes mid-game, they can reopen the URL and join again with the same session code and display name. Their seat and chip count are restored automatically.
+If you accidentally close or refresh your browser, reopen the URL and re-enter your name — the game will restore your seat.
 
 ---
 
