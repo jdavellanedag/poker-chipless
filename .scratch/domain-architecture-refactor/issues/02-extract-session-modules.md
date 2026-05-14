@@ -1,10 +1,10 @@
 ---
-status: pending
+status: done
 ---
 
 # Extract Session Modules
 
-> **Status:** `pending`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._

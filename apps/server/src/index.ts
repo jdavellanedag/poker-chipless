@@ -4,10 +4,13 @@ import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
 import express from 'express';
 import { Server } from 'socket.io';
-import type { ServerToClientEvents, ClientToServerEvents, GameState, CreateAckResponse, JoinAckResponse } from '@poker-chipless/types';
-import { createSession, joinSession } from './session.js';
+import type { ServerToClientEvents, ClientToServerEvents, CreateAckResponse, JoinAckResponse } from '@poker-chipless/types';
+import { createSession } from './session/create.js';
+import { joinSession } from './session/join.js';
+import { getSession, setSession } from './session/store.js';
+import { maybeScheduleAutoFold, handleDisconnect } from './session/disconnect.js';
 import { appendLog } from './game/state.js';
-import { fold, autoFold, check, call, bet, raise, allin } from './game/player-actions.js';
+import { fold, check, call, bet, raise, allin } from './game/player-actions.js';
 import { startGame, newHand, declareWinner, rebuy, pause, resume, reorderPlayers, endGame } from './game/host-actions.js';
 import { advanceRound } from './game/round.js';
 
@@ -24,46 +27,6 @@ app.get('/*path', (_req, res) => {
   res.sendFile(join(clientBuildPath, 'index.html'));
 });
 
-const DISCONNECT_TIMEOUT_MS = parseInt(process.env.DISCONNECT_TIMEOUT_MS ?? '10000', 10);
-
-type SessionRecord = {
-  state: GameState;
-  tokenMap: Map<string, string>;
-  previousPhase?: GameState['phase'];
-  autoFoldTimer?: ReturnType<typeof setTimeout>;
-};
-
-// session code → SessionRecord
-const sessions = new Map<string, SessionRecord>();
-
-function maybeScheduleAutoFold(code: string) {
-  const session = sessions.get(code);
-  if (!session) return;
-  const { state } = session;
-  const activePlayer = state.players[state.activePlayerIndex];
-  if (!activePlayer || activePlayer.isConnected || state.phase !== 'active') {
-    if (session.autoFoldTimer !== undefined) {
-      clearTimeout(session.autoFoldTimer);
-      session.autoFoldTimer = undefined;
-    }
-    return;
-  }
-  if (session.autoFoldTimer === undefined) {
-    const playerId = activePlayer.id;
-    session.autoFoldTimer = setTimeout(() => {
-      session.autoFoldTimer = undefined;
-      const s = sessions.get(code);
-      if (!s) return;
-      const result = autoFold(s.state, playerId);
-      if (result.ok) {
-        s.state = result.state;
-        io.to(code).emit('game:state', s.state);
-        maybeScheduleAutoFold(code);
-      }
-    }, DISCONNECT_TIMEOUT_MS);
-  }
-}
-
 io.on('connection', (socket) => {
   socket.on('session:create', ({ displayName }, ack) => {
     const name = displayName.trim();
@@ -76,7 +39,7 @@ io.on('connection', (socket) => {
     const tokenMap = new Map<string, string>();
     const hostId = state.players[0].id;
     tokenMap.set(token, hostId);
-    sessions.set(state.code, { state, tokenMap });
+    setSession(state.code, { state, tokenMap });
     socket.join(state.code);
     socket.data.code = state.code;
     socket.data.playerId = hostId;
@@ -85,7 +48,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('session:join', ({ code, displayName, token }, ack) => {
-    const session = sessions.get(code.toUpperCase());
+    const session = getSession(code.toUpperCase());
     if (!session) {
       ack({ ok: false, error: 'Session not found. Check the code and try again.' });
       return;
@@ -96,7 +59,7 @@ io.on('connection', (socket) => {
       const playerId = session.tokenMap.get(token)!;
       const player = session.state.players.find((p) => p.id === playerId);
       if (player) {
-        let restoredState: GameState = {
+        let restoredState = {
           ...session.state,
           players: session.state.players.map((p) =>
             p.id === playerId ? { ...p, isConnected: true } : p,
@@ -111,7 +74,7 @@ io.on('connection', (socket) => {
         socket.data.code = code.toUpperCase();
         socket.data.playerId = playerId;
         io.to(code.toUpperCase()).emit('game:state', session.state);
-        maybeScheduleAutoFold(code.toUpperCase());
+        maybeScheduleAutoFold(code.toUpperCase(), io);
         ack({ ok: true, token, playerId } as JoinAckResponse);
         return;
       }
@@ -134,7 +97,7 @@ io.on('connection', (socket) => {
 
   socket.on('host:reorder-players', ({ orderedPlayerIds }, ack) => {
     const { code, playerId } = socket.data as { code?: string; playerId?: string };
-    const session = code ? sessions.get(code) : undefined;
+    const session = code ? getSession(code) : undefined;
     if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
     const player = session.state.players.find((p) => p.id === playerId);
     if (!player?.isHost) { ack({ ok: false, error: 'Only the host can reorder players.' }); return; }
@@ -147,7 +110,7 @@ io.on('connection', (socket) => {
 
   socket.on('host:start-game', ({ startingStack, smallBlind, bigBlind }, ack) => {
     const { code, playerId } = socket.data as { code?: string; playerId?: string };
-    const session = code ? sessions.get(code) : undefined;
+    const session = code ? getSession(code) : undefined;
     if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
     const player = session.state.players.find((p) => p.id === playerId);
     if (!player?.isHost) { ack({ ok: false, error: 'Only the host can start the game.' }); return; }
@@ -157,13 +120,13 @@ io.on('connection', (socket) => {
     if (!handResult.ok) { ack({ ok: false, error: handResult.error }); return; }
     session.state = handResult.state;
     io.to(code!).emit('game:state', session.state);
-    maybeScheduleAutoFold(code!);
+    maybeScheduleAutoFold(code!, io);
     ack({ ok: true });
   });
 
   socket.on('host:new-hand', (_payload, ack) => {
     const { code, playerId } = socket.data as { code?: string; playerId?: string };
-    const session = code ? sessions.get(code) : undefined;
+    const session = code ? getSession(code) : undefined;
     if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
     const player = session.state.players.find((p) => p.id === playerId);
     if (!player?.isHost) { ack({ ok: false, error: 'Only the host can start a new hand.' }); return; }
@@ -180,13 +143,13 @@ io.on('connection', (socket) => {
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
-    maybeScheduleAutoFold(code!);
+    maybeScheduleAutoFold(code!, io);
     ack({ ok: true });
   });
 
   socket.on('host:advance-round', (_payload, ack) => {
     const { code, playerId } = socket.data as { code?: string; playerId?: string };
-    const session = code ? sessions.get(code) : undefined;
+    const session = code ? getSession(code) : undefined;
     if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
     const player = session.state.players.find((p) => p.id === playerId);
     if (!player?.isHost) { ack({ ok: false, error: 'Only the host can advance the round.' }); return; }
@@ -194,13 +157,13 @@ io.on('connection', (socket) => {
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
-    maybeScheduleAutoFold(code!);
+    maybeScheduleAutoFold(code!, io);
     ack({ ok: true });
   });
 
   socket.on('host:declare-winner', ({ playerId: winnerId }, ack) => {
     const { code, playerId } = socket.data as { code?: string; playerId?: string };
-    const session = code ? sessions.get(code) : undefined;
+    const session = code ? getSession(code) : undefined;
     if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
     const player = session.state.players.find((p) => p.id === playerId);
     if (!player?.isHost) { ack({ ok: false, error: 'Only the host can declare a winner.' }); return; }
@@ -213,93 +176,93 @@ io.on('connection', (socket) => {
 
   socket.on('action:fold', (_payload, ack) => {
     const { code, playerId } = socket.data as { code?: string; playerId?: string };
-    const session = code ? sessions.get(code) : undefined;
+    const session = code ? getSession(code) : undefined;
     if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
     const result = fold(session.state, playerId ?? '');
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
-    maybeScheduleAutoFold(code!);
+    maybeScheduleAutoFold(code!, io);
     ack({ ok: true });
   });
 
   socket.on('action:check', (_payload, ack) => {
     const { code, playerId } = socket.data as { code?: string; playerId?: string };
-    const session = code ? sessions.get(code) : undefined;
+    const session = code ? getSession(code) : undefined;
     if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
     const result = check(session.state, playerId ?? '');
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
-    maybeScheduleAutoFold(code!);
+    maybeScheduleAutoFold(code!, io);
     ack({ ok: true });
   });
 
   socket.on('action:call', (_payload, ack) => {
     const { code, playerId } = socket.data as { code?: string; playerId?: string };
-    const session = code ? sessions.get(code) : undefined;
+    const session = code ? getSession(code) : undefined;
     if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
     const result = call(session.state, playerId ?? '');
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
-    maybeScheduleAutoFold(code!);
+    maybeScheduleAutoFold(code!, io);
     ack({ ok: true });
   });
 
   socket.on('action:bet', ({ amount }, ack) => {
     const { code, playerId } = socket.data as { code?: string; playerId?: string };
-    const session = code ? sessions.get(code) : undefined;
+    const session = code ? getSession(code) : undefined;
     if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
     const result = bet(session.state, playerId ?? '', amount);
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
-    maybeScheduleAutoFold(code!);
+    maybeScheduleAutoFold(code!, io);
     ack({ ok: true });
   });
 
   socket.on('action:raise', ({ amount }, ack) => {
     const { code, playerId } = socket.data as { code?: string; playerId?: string };
-    const session = code ? sessions.get(code) : undefined;
+    const session = code ? getSession(code) : undefined;
     if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
     const result = raise(session.state, playerId ?? '', amount);
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
-    maybeScheduleAutoFold(code!);
+    maybeScheduleAutoFold(code!, io);
     ack({ ok: true });
   });
 
   socket.on('action:allin', (_payload, ack) => {
     const { code, playerId } = socket.data as { code?: string; playerId?: string };
-    const session = code ? sessions.get(code) : undefined;
+    const session = code ? getSession(code) : undefined;
     if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
     const result = allin(session.state, playerId ?? '');
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
     io.to(code!).emit('game:state', session.state);
-    maybeScheduleAutoFold(code!);
+    maybeScheduleAutoFold(code!, io);
     ack({ ok: true });
   });
 
   socket.on('host:pause', (_payload, ack) => {
     const { code, playerId } = socket.data as { code?: string; playerId?: string };
-    const session = code ? sessions.get(code) : undefined;
+    const session = code ? getSession(code) : undefined;
     if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
     const player = session.state.players.find((p) => p.id === playerId);
     if (!player?.isHost) { ack({ ok: false, error: 'Only the host can pause the game.' }); return; }
     const result = pause(session.state);
     if (!result.ok) { ack({ ok: false, error: result.error }); return; }
     session.state = result.state;
-    maybeScheduleAutoFold(code!);
+    maybeScheduleAutoFold(code!, io);
     io.to(code!).emit('game:state', session.state);
     ack({ ok: true });
   });
 
   socket.on('host:resume', (_payload, ack) => {
     const { code, playerId } = socket.data as { code?: string; playerId?: string };
-    const session = code ? sessions.get(code) : undefined;
+    const session = code ? getSession(code) : undefined;
     if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
     const player = session.state.players.find((p) => p.id === playerId);
     if (!player?.isHost) { ack({ ok: false, error: 'Only the host can resume the game.' }); return; }
@@ -312,7 +275,7 @@ io.on('connection', (socket) => {
 
   socket.on('host:rebuy', ({ playerId: targetId, amount }, ack) => {
     const { code, playerId } = socket.data as { code?: string; playerId?: string };
-    const session = code ? sessions.get(code) : undefined;
+    const session = code ? getSession(code) : undefined;
     if (!session) { ack({ ok: false, error: 'Session not found.' }); return; }
     const player = session.state.players.find((p) => p.id === playerId);
     if (!player?.isHost) { ack({ ok: false, error: 'Only the host can issue a rebuy.' }); return; }
@@ -324,38 +287,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    const { code, playerId } = socket.data as { code?: string; playerId?: string };
-    if (!code || !playerId) return;
-    const session = sessions.get(code);
-    if (!session) return;
-    const player = session.state.players.find((p) => p.id === playerId);
-
-    const disconnectedState: GameState = {
-      ...session.state,
-      players: session.state.players.map((p) =>
-        p.id === playerId ? { ...p, isConnected: false } : p,
-      ),
-    };
-
-    if (player?.isHost && (session.state.phase === 'active' || session.state.phase === 'showdown')) {
-      session.previousPhase = session.state.phase;
-      session.state = appendLog(
-        { ...disconnectedState, phase: 'paused' },
-        `${player.displayName} disconnected`,
-      );
-      if (session.autoFoldTimer !== undefined) {
-        clearTimeout(session.autoFoldTimer);
-        session.autoFoldTimer = undefined;
-      }
-    } else {
-      session.state = appendLog(
-        disconnectedState,
-        player ? `${player.displayName} disconnected` : 'A player disconnected',
-      );
-      maybeScheduleAutoFold(code);
-    }
-
-    io.to(code).emit('game:state', session.state);
+    handleDisconnect(socket, io);
   });
 });
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { createSession, joinSession } from '../../session.js';
+import { createSession } from '../../session/create.js';
+import { joinSession } from '../../session/join.js';
 import { appendLog, withValidActions } from '../../game/state.js';
 import { fold, autoFold, check, call, bet, raise, allin } from '../../game/player-actions.js';
 import { startGame, newHand } from '../../game/host-actions.js';
