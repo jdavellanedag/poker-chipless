@@ -1,6 +1,8 @@
 import socket from './socket.js';
 import { useGameState } from './hooks/useGameState.js';
 import { useSession } from './hooks/useSession.js';
+
+const emit = socket.emit.bind(socket);
 import { GameScreen } from './screens/GameScreen.js';
 import { GameOverScreen } from './screens/GameOverScreen.js';
 import { LobbyScreen } from './screens/LobbyScreen.js';
@@ -13,7 +15,6 @@ export default function App() {
           createName, setCreateName, joinCode, setJoinCode,
           joinName, setJoinName, loading, handleCreate, handleJoin } = useSession();
 
-  const emit = socket.emit.bind(socket);
   function handleStartGame(s: number, sb: number, bb: number, cb: (err?: string) => void) {
     emit('host:start-game', { startingStack: s, smallBlind: sb, bigBlind: bb }, (res) => cb(res.ok ? undefined : res.error));
   }
