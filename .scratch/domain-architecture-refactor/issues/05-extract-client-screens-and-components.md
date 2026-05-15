@@ -1,10 +1,10 @@
 ---
-status: in-progress
+status: done
 ---
 
 # Extract Client Screens and Components
 
-> **Status:** `in-progress`
+> **Status:** `done`
 
 ## Clarification
 _No open questions._
